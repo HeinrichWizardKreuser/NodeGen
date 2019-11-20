@@ -102,6 +102,11 @@ public class NodeGen {
 
     // delaunize points
     HashMap<Point, ArrayList<Point>> del = Delaunay.delaunize(ps);
+    StdDraw.clear(StdDraw.WHITE);
+    drawPoints(ps);
+    drawEdges(del);
+    StdDraw.save("del.png");
+
     // create graph G
     HashMap<Point, ArrayList<Point>> G = new HashMap<>();
     for (Point p : ps) {
@@ -200,9 +205,12 @@ public class NodeGen {
       // Core.freeze();
     }
 
-    Core.freeze("applying post fix");
+    StdDraw.save("first.png");
+
+    //Core.freeze("applying post fix");
 
     // post fix
+    post_fix:
     for (Point p : G.keySet()) {
       // if there is a node with no connection
       if (G.get(p).size() <= 1) {
@@ -229,6 +237,8 @@ public class NodeGen {
               G.get(p).add(b);
               G.get(a).add(p);
               G.get(b).add(p);
+
+              continue post_fix;
             }
           }
         }
@@ -239,7 +249,95 @@ public class NodeGen {
     drawPoints(ps);
     drawEdges(G);
 
+    StdDraw.save("post_fix.png");
 
+
+    // now onto phase 2:
+    // we must perform voronoi on the map
+    // first choose random places to place players
+    int players = 4;
+    int amnt = players;
+    // copy graph of G
+    HashMap<Point, ArrayList<Point>> H = new HashMap<>();
+    for (Point p : G.keySet()) {
+      ArrayList<Point> adj = new ArrayList<>();
+      for (Point a : G.get(p)) {
+        adj.add(a);
+      }
+      H.put(p, adj);
+    }
+    Point[] playerSpawns = new Point[4];
+    ArrayList<ArrayList<SpreadPoint>> plauerSps = new ArrayList<>();
+    while (amnt > 0) {
+      // choose random point in H
+      Point rand = Core.randomKey(H);
+      // choose a random edge
+      Point adj = H.get(rand).get((int)(Math.random()*H.get(rand).size()));
+      // add new spread point there
+      double randDouble = Math.random();
+      Core.log("randDouble = " + randDouble);
+      // Point playerSpawn = new Point((rand.x + adj.x)*randDouble, (rand.y + adj.y)*randDouble);
+      Point playerSpawn = new Point(rand.x*randDouble + adj.x*(1-randDouble), rand.y*randDouble + adj.y*(1-randDouble));
+      // add to player spawns
+      playerSpawns[--amnt] = playerSpawn;
+
+      // Create SpreadPoint of this player spawn
+      SpreadPoint sp1 = new SpreadPoint(amnt, playerSpawn, playerSpawn, rand);
+      SpreadPoint sp2 = new SpreadPoint(amnt, playerSpawn, playerSpawn, adj);
+      // add to this player's spread points
+      playerSPs.get(amnt).add(sp1);
+      playerSPs.get(amnt).add(sp2);
+
+
+      // remove this point from H
+      H.remove(rand);
+      // remove all points adjacent to it as well
+      for (Point p : G.get(rand)) {
+        H.remove(p);
+      }
+    }
+
+    // draw all player spawns on G
+    StdDraw.setPenColor(StdDraw.GREEN);
+    for (Point p : playerSpawns) {
+      StdDraw.filledCircle(p.x, p.y, 0.1);
+    }
+
+
+    // now spread paths until they are done
+    // create hashmap containing all spreadpoints, mapped to their pathlengths
+    HashMap<SpreadPoint, Double> pathLengths = new HashMap<>();
+    for (int i = 0; i < players; i++) {
+      for (SpreadPoint sp : playerSPs.get(i)) {
+        pathLengths.put(sp, 0d);
+      }
+    }
+    while (true) {
+      // select current spread point based on smalles pathLength
+      ArrayList<SpreadPoint> sorted = Core.sort(pathLengths, "min");
+      SpreadPoint sp = sorted.get(0);
+      // get next point to progress to
+      Point next = sp.next;
+      // check if any other spreadpoint can get to this sp first
+      mayProgress:
+      while (true) {
+        int N = sorted.size();
+        for (int i = 1; i < N; i++) {
+          SpreadPoint sp2 = sorted.get(i);
+          // can this spread point get to it first?
+
+
+          // it must be able to path through points and not pass through
+            // a node that is in the path of another spreadPoint
+          // it must have an idea of where it can go...via G
+          // but it must check whether it can get there
+
+
+
+
+        }
+      // now that we have the spreadPoint, we must make it continue to the next
+    }
     //ArrayList<Point[]> tris = CoreGeom.getTriangles(del);
 
     // remove edges connected to vertices of highest degree not equal to 1 or 3
@@ -250,6 +348,105 @@ public class NodeGen {
     //HashMap<Point, ArrayList<Point>> map = nodeGen(ps);
 
   }
+
+
+  private static class SpreadPoint {
+    public int player;
+    public Point stc, next, curr;
+    public SpreadPoint(Point src, Point curr, Point next) {
+      this.src = src;
+      this.curr = curr;
+      this.next = next;
+      path.add(src);
+      path.add(curr);
+    }
+    public ArrayList<Point> path;
+    public double pathLength() {
+      double pathLength = 0;
+      int N = path.size();
+      for (int i = 0; i < N-1; i++) {
+        pathLength += path.get(i).dist(path.get(i+1));
+      }
+      return pathLength;
+    }
+
+
+    public double distance(Point dest, Point src, HashMap<Point, ArrayList<Point>> G, ArrayList<SpreadPoint> sps) {
+      // we have dest, we have src, we have the graph they are moving on
+      // so then we move per node
+      // but we may not move to nodes that are in the path of one of the sps
+
+
+
+      // we must have a pq
+      PriorityQueue<Point> pq = new PriorityQueue<>();
+      // and keep track of current distances
+      HashMap<Point, Double> dist = new HashMap<>();
+      for (Point p : G.keySet()) {
+        dist.put(p, Double.MAX_VALUE);
+      }
+      // add current to pq
+      pq.add(src);
+      // we must have an idea of which nodes have already been explored
+      ArrayList<Point> explored = new ArrayList<>();
+      // define an off limits nodes that are in spread path
+      ArrayList<Point> offLimits = new ArrayList<>();
+      for (SpreadPoint sp : sps) {
+        for (Point p : sp.path) {
+          if (!offLimits.contains(p)) {
+            offLimits.add(p);
+          }
+        }
+      }
+      // just make sure that the current node isn't in it
+      if (offLimits.contains(src)) {
+        offLimits.remove(src);
+      }
+
+      // loop:
+      while (pq.size() > 0) {
+        // get p from priority queue
+        Point p = pq.remove();
+        // add p to explored
+        explored.add(p);
+        // for each adj to p:
+        for (Point adj : G.get(p)) {
+          // check if offlimits
+          if (offLimits.contains(adj)) {
+            continue;
+          }
+          // now we know that adj is not offLimits
+          // first check if already explored
+          if (explored.contains(adj)) {
+            // then we have already been here.
+            // but if it is a shorted path to get there
+            double newDistance = p.dist(adj);
+            if (newDistance < dist.get(adj)) {
+              //  then we must update the path there
+              dist.put(newDistance);
+              //  and then add to pq
+              pq.add(adj);
+            }
+          } else {
+            // then we have never been here. immediately travel to it
+            pq.add(adj);
+            dist.put(adj, p.dist(adj));
+          }
+        }
+      }
+
+      // now we must just find the distance to that node
+      double distance = dist.get(dest);
+    }
+
+
+
+
+
+
+
+  }
+
 
   private static void drawPoints(ArrayList<Point> ps) {
     double radius = 0.1;

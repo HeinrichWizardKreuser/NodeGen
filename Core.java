@@ -532,6 +532,16 @@ public class Core {
   }
 
   /**
+   * Returns a random key from the given hashmap
+   * @param map ant hashmap with nonzero size
+   * @return a random key from the map
+   */
+  @SuppressWarnings("unchecked")
+  public static <T, V> T randomKey(HashMap<T, V> map) {
+    return (T)(map.keySet().toArray())[(int)(Math.random()*map.size())];
+  }
+
+  /**
    * Groups nodes in the given graph (in the form of an adjacency list) to nodes
    * they are adjacent to based on some predicate. If the predicate is simply
    * a predicate that returns true, then this method does the same as a BFS.
@@ -596,17 +606,17 @@ public class Core {
       }
       last[pos] = v;
     }
-    
+
     // calc how many resses
     int m = (size * 16) / 10 + 1; // 31 number s * 16 = 496 ~ 50 indices ~ 25 resses
     int n = m/2;
     // now for random number generation
-    
+
     LinkedList<Double> random = new LinkedList<>();
     char[] numb = new char[16];
     int index = 0;
     for (int res = 0; res < n; res++) {
-      
+
       // 1) index insert
       int[] next = new int[10]; // new version of a
       for (int i = 0; i < 10; i++) {
@@ -651,4 +661,3 @@ public class Core {
     return random;
   }
 }
-
