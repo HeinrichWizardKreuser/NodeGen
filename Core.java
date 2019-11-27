@@ -532,6 +532,51 @@ public class Core {
   }
 
   /**
+   * Retrieves the key mapped to the maximum value in the given mapping
+   *
+   * @param map the map in which to search the key mapped to the maximum value
+   * @return the key mapped to the maximum value
+   */
+  public static <T> T getMaxKey(HashMap<T, Double> map) {
+    int size = map.size();
+    if (size == 0) {
+      return null;
+    }
+    T maxT = randomKey(map);
+    double max = map.get(maxT);
+    for (T t : map.keySet()) {
+      if (max < map.get(t)) {
+        max = map.get(t);
+        maxT = t;
+      }
+    }
+    return maxT;
+  }
+
+  /**
+   * Retrieves the key mapped to the minimum value in the given mapping
+   *
+   * @param map the map in which to search the key mapped to the minimum value
+   * @return the key mapped to the minimum value
+   */
+  public static <T> T getMinKey(HashMap<T, Double> map) {
+    int size = map.size();
+    if (size == 0) {
+      return null;
+    }
+    T minT = randomKey(map);
+    double min = map.get(minT);
+    for (T t : map.keySet()) {
+      if (map.get(t) < min) {
+        min = map.get(t);
+        minT = t;
+      }
+    }
+    return minT;
+  }
+
+
+  /**
    * Returns a random key from the given hashmap
    * @param map ant hashmap with nonzero size
    * @return a random key from the map
@@ -539,6 +584,10 @@ public class Core {
   @SuppressWarnings("unchecked")
   public static <T, V> T randomKey(HashMap<T, V> map) {
     return (T)(map.keySet().toArray())[(int)(Math.random()*map.size())];
+  }
+
+  public static <V> V randomKey(ArrayList<V> lis) {
+    return lis.get((int)(Math.random() * lis.size()));
   }
 
   /**

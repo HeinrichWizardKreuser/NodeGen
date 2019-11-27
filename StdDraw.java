@@ -588,6 +588,20 @@ public final class StdDraw implements ActionListener, MouseListener, MouseMotion
         draw();
     }
 
+    public static void filledCircle(Point p, double radius) {
+      filledCircle(p.x, p.y, radius);
+    }
+
+    public static void filledCircle(double x, double y, double radius, Color color) {
+      setPenColor(color);
+      filledCircle(x, y, radius);
+    }
+
+    public static void filledCircle(Point p, double radius, Color color) {
+      setPenColor(color);
+      filledCircle(p.x, p.y, radius);
+    }
+
 
     /**
      * Draws an ellipse with the specified semimajor and semiminor axes,
@@ -704,6 +718,13 @@ public final class StdDraw implements ActionListener, MouseListener, MouseMotion
     public static void filledSquare(double x, double y, double halfLength, Color color){
         setPencolor(color);
         filledSquare(x, y, halfLength);
+    }
+    public static void filledSquare(Point p, double halfLength){
+        filledSquare(p.x, p.y, halfLength);
+    }
+    public static void filledSquare(Point p, double halfLength, Color color){
+        setPencolor(color);
+        filledSquare(p.x, p.y, halfLength);
     }
 
     /**
@@ -1131,6 +1152,14 @@ public final class StdDraw implements ActionListener, MouseListener, MouseMotion
         setPencolor(color);
         text(x, y, text);
     }
+    public static void text(Point p, String text) {
+      text(p.x, p.y, text);
+    }
+    public static void text(Point p, String text, Color color) {
+      setPencolor(color);
+      text(p.x, p.y, text);
+    }
+
     //returns the string width as we would input it into StdDraw functions
     public static double getTextWidth(String text){
         offscreen.setFont(font);

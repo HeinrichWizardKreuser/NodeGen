@@ -100,6 +100,20 @@ public class Point implements Comparable<Point> {
 		this.z = (a.z + b.z)/2;
 	}
 
+	/* Constructer for the weighted average of two points */
+	public Point(Point a, Point b, double d) {
+		if (d < 0d && !epsilon(d, 0d)) {
+			throw new IllegalArgumentException("d("+d+") must be between 0 and 1 inclusive!");
+		}
+		if (1d < d && !epsilon(d, 1d)) {
+			throw new IllegalArgumentException("d("+d+") must be between 0 and 1 inclusive!");
+		}
+		double i = 1 - d;
+		this.x = a.x*d + b.x*i;
+		this.y = a.y*d + b.y*i;
+		this.z = a.z*d + b.z*i;
+	}
+
 	/* Setter methods */
 	public void setTo(Point p) {
 		this.x = p.x;

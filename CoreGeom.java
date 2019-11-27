@@ -491,4 +491,213 @@ public class CoreGeom {
     return randomPoints(w, h, n, 0);
   }
 
+  /**
+   * Given a list of nodes on the given graph, it performs voronoi on the graph
+   * in such a way that we get all of the nodes mapped to the node in the list
+   * that it is closest to
+   *
+   * @param vlis is the list of the nodes that will represent the sites for the
+   *        graph
+   * @param graph is all of the points on the graph mapped to all other points
+   *        that they are adj to in the graph
+   * @return a mapping of each point P in vlis to a subgraph. Each subgraph is a
+   *         part of the graph, but where all nodes are closer to P than any other
+   *         node in vlis. It will also contain new leaf nodes created on edges
+   *         where the end points are closer to different nodes in vlis. Thus
+   *         these new leaf nodes are created to have more precision
+   */
+  public static HashMap<Point, HashMap<Point, ArrayList<Point>>> voronoiGraph(
+    ArrayList<Point> vlis,
+    HashMap<Point, ArrayList<Point>> graph) {
+
+    // voro = map of distance between vlis nodes and their distnaces to other points in the graph
+    HashMap<Point, HashMap<Point, Double>> voro = new HashMap<Point, HashMap<Point, Double>>();
+
+    // perform dijkstra for each node in voro
+    for (Point a : vlis) {
+      voro.put(a, dijkstraGraph(a, graph));
+    }
+
+    // closestTo = all points in G mapped to the point in voro they are closest to
+    HashMap<Point, Point> closestTo = new HashMap<Point, Point>();
+    // edgeConflicts = list of all edges that have endpoints closer to opposing owners
+    ArrayList<Point[]> edgeConflicts = new ArrayList<>();
+    // edgeFriendly = list of all edges of which both ends belong to the same owners
+    ArrayList<Point[]> edgeFriendly = new ArrayList<>();
+    // find the owner to which each node is closest to
+    for (Point p : graph.keySet()) {
+      // find which owner p is closest to
+      Point minDistP = Core.randomKey(voro);
+      double minDist = voro.get(minDistP).get(p);
+      for (Point a : voro.keySet()) {
+        HashMap<Point, Double> cost = voro.get(a);
+        if (cost.get(p) < minDist) {
+          minDist = cost.get(p);
+          minDistP = a;
+        }
+      }
+      closestTo.put(p, minDistP);
+
+      // check if p is adj to an opposing owner
+      for (Point adj : graph.get(p)) {
+        // if adj has also been treated
+        if (closestTo.containsKey(adj)) {
+          // are they closer to different owners?
+          if (closestTo.get(adj) != p) {
+            edgeConflicts.add(new Point[]{p, adj});
+          } else {
+            edgeFriendly.add(new Point[]{p, adj});
+          }
+        }
+      }
+    }
+
+    // define the edges on which there are conflicts
+    HashMap<Point[], Point> borders = new HashMap<>();
+    for (Point[] e : edgeConflicts) {
+      double d = e[0].dist(e[1]);
+      double len = (voro.get(closestTo.get(e[0])).get(e[0]) +
+                    voro.get(closestTo.get(e[1])).get(e[1]) + d)/2 -
+                    voro.get(closestTo.get(e[0])).get(e[0]);
+
+      Point border = new Point(e[0], e[1], 1 - len/d);
+      borders.put(e, border);
+    }
+
+    // create subgraph of each owner
+    HashMap<Point, HashMap<Point, ArrayList<Point>>> subgraphs = new HashMap<>();
+    for (Point p : voro.keySet()) {
+      subgraphs.put(p, new HashMap<>());
+    }
+    // add each point
+    for (Point p : graph.keySet()) {
+      // check which owner this belongs to
+      Point belongsTo = closestTo.get(p);
+      HashMap<Point, ArrayList<Point>> subgraph = subgraphs.get(belongsTo);
+      subgraph.put(p, new ArrayList<Point>());
+      for (Point adj : graph.get(p)) {
+        Point adjBelongsTo = closestTo.get(adj);
+        if (belongsTo == adjBelongsTo) {
+          subgraph.get(p).add(adj); // we do not do this for adj to p since that will be done on its own
+        } else {
+          // find border that has this node and adj in edge
+          for (Point[] e : borders.keySet()) {
+            if ((e[0] == p && e[1] == adj) || (e[0] == adj && e[1] == p)) {
+              Point border = borders.get(e);
+              // now we must add a new node - from borderAccess
+              subgraph.get(p).add(border);
+              // however we will do the border to p for this case
+              subgraph.put(border, new ArrayList<Point>());
+              subgraph.get(border).add(p);
+              break;
+            }
+          }
+        }
+      }
+    }
+    return subgraphs;
+  }
+
+  /**
+   * Given a starting node on a given graph, it performs dijkstra's algorithm.
+   *
+   * @param a the starting node to perform dijkstra from
+   * @param graph is all of the points on the graph mapped to all other points
+   *        that they are adjacent to in the graph
+   * @return a cost matrix. It is a mapping of all points in the graph to the
+   *         value of their shortest path to a.
+   */
+  public static HashMap<Point, Double> dijkstraGraph(
+    Point a,
+    HashMap<Point, ArrayList<Point>> graph) {
+
+    ArrayList<Point> curr = new ArrayList<>();
+    curr.add(a);
+    HashMap<Point, Double> cost = new HashMap<>();
+    cost.put(a, 0d);
+    ArrayList<Point> explored = new ArrayList<>();
+    while (!curr.isEmpty()) {
+      // find point with lowest score in cost
+      Point p = curr.get(0);
+      for (Point p1 : curr) {
+        if (cost.get(p1) < cost.get(p)) {
+          p = p1;
+        }
+      }
+      curr.remove(p);
+      // explore point
+      explored.add(p);
+      // now go to all adjacent points
+      for (Point adj : graph.get(p)) {
+        double newDist = cost.get(p) + p.dist(adj);
+        if (explored.contains(adj) && newDist > cost.get(adj)) {
+          continue;
+        }
+        curr.add(adj);
+        explored.add(adj);
+        cost.put(adj, newDist);
+      }
+    }
+
+    return cost;
+  }
+
+  /**
+   * Finds the centroid of the graph. That is, the node that is at the "centre"
+   * (in terms of distance) of the graph. It creates a new node to represent this
+   * and it lies on an edge of the graph.
+   *
+   * @param graph is all of the points on the graph mapped to all other points
+   *        that they are adjacent to in the graph
+   * @return an ordered size3 array that contains a new node that represents the
+   *         centroid at index 1. Index 0 and 2 contain the endpoints of the edge.
+   */
+  public static Point[] graphCentroid(HashMap<Point, ArrayList<Point>> graph) {
+    // map each node to the value of the longest distance to another node in the graph
+    HashMap<Point, Double> furthestCosts = new HashMap<>();
+    for (Point p : graph.keySet()) {
+      // get the cost matrix
+      HashMap<Point, Double> cost = dijkstraGraph(p, graph);
+      // get the point with the highest value
+      Point furthest = Core.getMaxKey(cost);
+      double furthestCost = cost.get(furthest);
+      // add to mapping
+      furthestCosts.put(p, furthestCost);
+    }
+    // the node with the minimum max cost will be part of the edge containing the centroid
+    Point e0 = Core.getMinKey(furthestCosts);
+    // now search among adjacent nodes for the one with the smallest furthest cost
+    Point e1 = Core.randomKey(graph.get(e0));
+    for (Point adj : graph.get(e0)) {
+      if (furthestCosts.get(adj) < furthestCosts.get(e1)) {
+        e1 = adj;
+      }
+    }
+    // now we have the edge. Get weighted ave on that line based on the costs
+    double e0Cost = furthestCosts.get(e0), e1Cost = furthestCosts.get(e1);
+
+    double d = e0Cost/(e0Cost + e1Cost);
+
+    Point ave = new Point(e0, e1, d);
+
+    return new Point[]{e0, ave, e1};
+  }
+
+  /**
+   * Calculates the length of the graph. That is, the sum lengtt of all edges
+   * in the graph.
+   *
+   * @param graph is all of the points on the graph mapped to all other points
+   *        that they are adjacent to in the graph
+   * @return the sum total distance of all edges on the graph.
+   */
+  public static double graphLength(HashMap<Point, ArrayList<Point>> graph) {
+    double graphLength = 0;
+    for (Point p : graph.keySet()) {
+      for (Point adj : graph.get(p)) {
+        graphLength += p.dist(adj);
+      }
+    }
+    return graphLength/2;
+  }
 }

@@ -1,4 +1,5 @@
 import java.util.*;
+import java.util.function.Function;
 import java.awt.Color;
 
 public class NodeGen {
@@ -34,10 +35,10 @@ public class NodeGen {
       top = Math.max(p.y, top);
     }
 
-    System.out.println("left = " + left);
-    System.out.println("right = " + right);
-    System.out.println("top = " + top);
-    System.out.println("bot = " + bot);
+    // System.out.println("left = " + left);
+    // System.out.println("right = " + right);
+    // System.out.println("top = " + top);
+    // System.out.println("bot = " + bot);
 
     // find ideal box
     double left_d = x0 + (x1 - x0) * 0.05;
@@ -45,24 +46,24 @@ public class NodeGen {
     double bot_d = y0 + (y1 - y0) * 0.05;
     double top_d = y1 - (y1 - y0) * 0.05;
 
-    System.out.println("left_d = " + left_d);
-    System.out.println("right_d = " + right_d);
-    System.out.println("top_d = " + top_d);
-    System.out.println("bot_d = " + bot_d);
+    // System.out.println("left_d = " + left_d);
+    // System.out.println("right_d = " + right_d);
+    // System.out.println("top_d = " + top_d);
+    // System.out.println("bot_d = " + bot_d);
 
 
     // find multipliers
     double vertical_multiplier = (top_d - bot_d) / (top - bot);
     double horizontal_multiplier = (right_d - left_d) / (right - left);
-    System.out.println("vertical_multiplier = " + vertical_multiplier);
-    System.out.println("horizontal_multiplier = " + horizontal_multiplier);
+    // System.out.println("vertical_multiplier = " + vertical_multiplier);
+    // System.out.println("horizontal_multiplier = " + horizontal_multiplier);
 
 
     // find the centre of the current box
     double centre_x = left + (right - left) * 0.5;
     double centre_y = bot + (top - bot) * 0.5;
-    System.out.println("centre_x = " + centre_x);
-    System.out.println("centre_y = " + centre_y);
+    // System.out.println("centre_x = " + centre_x);
+    // System.out.println("centre_y = " + centre_y);
 
     // subtract centre from a;; points
     for (Point p : ps) {
@@ -79,8 +80,8 @@ public class NodeGen {
     // find the centre of the true box
     double centre_x_d = left_d + (right_d - left_d) * 0.5;
     double centre_y_d = bot_d + (top_d - bot_d) * 0.5;
-    System.out.println("centre_x_d = " + centre_x_d);
-    System.out.println("centre_y_d = " + centre_y_d);
+    // System.out.println("centre_x_d = " + centre_x_d);
+    // System.out.println("centre_y_d = " + centre_y_d);
 
     // add true centre to all points
     for (Point p : ps) {
@@ -245,6 +246,13 @@ public class NodeGen {
       }
     }
 
+//__________________________________________________________________________________________________
+// =================================================================================================
+//__________________________________________________________________________________________________
+
+
+
+
     StdDraw.clear(StdDraw.WHITE);
     drawPoints(ps);
     drawEdges(G);
@@ -267,7 +275,15 @@ public class NodeGen {
       H.put(p, adj);
     }
     Point[] playerSpawns = new Point[4];
-    ArrayList<ArrayList<SpreadPoint>> plauerSps = new ArrayList<>();
+    // make copy of graph
+    HashMap<Point, ArrayList<Point>> graph = new HashMap<>();
+    for (Point p : G.keySet()) {
+      ArrayList<Point> adj = new ArrayList<>();
+      for (Point a : G.get(p)) {
+        adj.add(a);
+      }
+      graph.put(p, adj);
+    }
     while (amnt > 0) {
       // choose random point in H
       Point rand = Core.randomKey(H);
@@ -280,171 +296,270 @@ public class NodeGen {
       Point playerSpawn = new Point(rand.x*randDouble + adj.x*(1-randDouble), rand.y*randDouble + adj.y*(1-randDouble));
       // add to player spawns
       playerSpawns[--amnt] = playerSpawn;
-
-      // Create SpreadPoint of this player spawn
-      SpreadPoint sp1 = new SpreadPoint(amnt, playerSpawn, playerSpawn, rand);
-      SpreadPoint sp2 = new SpreadPoint(amnt, playerSpawn, playerSpawn, adj);
-      // add to this player's spread points
-      playerSPs.get(amnt).add(sp1);
-      playerSPs.get(amnt).add(sp2);
-
-
-      // remove this point from H
+      // remove them from H
+      ArrayList<Point> adjToRand = new ArrayList<>();
+      for (Point p : H.get(rand)) {
+        adjToRand.add(p);
+      }
+      ArrayList<Point> adjToAdj = new ArrayList<>();
+      for (Point p : H.get(adj)) {
+        adjToAdj.add(p);
+      }
+      for (Point p : adjToRand) {
+        H.get(rand).remove(p);
+        H.get(p).remove(rand);
+      }
+      for (Point p : adjToAdj) {
+        H.get(adj).remove(p);
+        H.get(p).remove(adj);
+      }
       H.remove(rand);
-      // remove all points adjacent to it as well
-      for (Point p : G.get(rand)) {
-        H.remove(p);
-      }
+      H.remove(adj);
+
+      // now make the edit to graph
+      // add spawn to graph
+      graph.put(playerSpawn, new ArrayList<Point>());
+      // add connection to adj and rand
+      graph.get(playerSpawn).add(rand);
+      graph.get(playerSpawn).add(adj);
+      graph.get(rand).add(playerSpawn);
+      graph.get(adj).add(playerSpawn);
+      // sever connection between rand and adj
+      graph.get(rand).remove(adj);
+      graph.get(adj).remove(rand);
+
+
     }
 
+    // // fix anything wrong in G
+    // // just draw the graph for me real quick
+    // for (Point p : G.keySet()) {
+    //   for (Point adj : G.get(p)) {
+    //     if (!G.get(adj).contains(p)) {
+    //       StdDraw.filledCircle(p, 0.05, StdDraw.CYAN);
+    //       StdDraw.filledCircle(adj, 0.05, StdDraw.YELLOW);
+    //       Core.freeze();
+    //     }
+    //   }
+    // }
+    // Core.freeze();
+
+
+
+
+
+    playerColors = new HashMap<>();
+    playerColors.put(playerSpawns[0], StdDraw.RED);
+    playerColors.put(playerSpawns[1], StdDraw.BLUE);
+    playerColors.put(playerSpawns[2], StdDraw.GREEN);
+    playerColors.put(playerSpawns[3], StdDraw.YELLOW);
     // draw all player spawns on G
-    StdDraw.setPenColor(StdDraw.GREEN);
     for (Point p : playerSpawns) {
-      StdDraw.filledCircle(p.x, p.y, 0.1);
+      StdDraw.setPenColor(playerColors.get(p));
+      StdDraw.filledCircle(p.x, p.y, 0.075);
     }
 
 
-    // now spread paths until they are done
-    // create hashmap containing all spreadpoints, mapped to their pathlengths
-    HashMap<SpreadPoint, Double> pathLengths = new HashMap<>();
-    for (int i = 0; i < players; i++) {
-      for (SpreadPoint sp : playerSPs.get(i)) {
-        pathLengths.put(sp, 0d);
-      }
+    // now we have player spawns, perform voronoi
+    // now add the playerSpawns
+    ArrayList<Point> vlis = new ArrayList<>();
+    for (Point p : playerSpawns) {
+      vlis.add(p);
     }
-    while (true) {
-      // select current spread point based on smalles pathLength
-      ArrayList<SpreadPoint> sorted = Core.sort(pathLengths, "min");
-      SpreadPoint sp = sorted.get(0);
-      // get next point to progress to
-      Point next = sp.next;
-      // check if any other spreadpoint can get to this sp first
-      mayProgress:
-      while (true) {
-        int N = sorted.size();
-        for (int i = 1; i < N; i++) {
-          SpreadPoint sp2 = sorted.get(i);
-          // can this spread point get to it first?
+    voronoiGraph(vlis, graph);
+  }
+
+  public static HashMap<Point, Color> playerColors = null;
+
+  public static void voronoiGraph(ArrayList<Point> vlis, HashMap<Point, ArrayList<Point>> graph) {
+    // fix anything wrong in G
+    // just draw the graph for me real quick
+    Point[] e = isBroken(graph);
+    if (e != null) {
+      StdDraw.filledCircle(e[0], 0.05, StdDraw.CYAN);
+      StdDraw.filledCircle(e[1], 0.05, StdDraw.YELLOW);
+      int iia = (new int[1])[1];
+    }
+
+    // voro = map of distance between playerspawns and their distnaces to other points in the graph
+    HashMap<Point, HashMap<Point, Double>> voro = new HashMap<Point, HashMap<Point, Double>>();
+    double d = 0;
+    for (Point a : vlis) {
+      Core.log("____________");
+      // a is the starting node
+      // lis is the current nodes to look at
+      ArrayList<Point> lis = new ArrayList<>();
+      lis.add(a);
+      // explored is all of the nodes that we have looked at
+      HashMap<Point, Double> explored = new HashMap<>();
+      explored.put(a, 0d);
+      whileLisNotEmpty:
+      while (!lis.isEmpty()) {
+
+        //Point p = lis.remove(0);
+        // remove smallest from list
+        Point p = lis.get(0);
+        for (int i = 1; i < lis.size(); i++) {
+          if (explored.get(lis.get(i)) < explored.get(p)) {
+            p = lis.get(i);
+          }
+        }
+        lis.remove(p);
 
 
-          // it must be able to path through points and not pass through
-            // a node that is in the path of another spreadPoint
-          // it must have an idea of where it can go...via G
-          // but it must check whether it can get there
+        StdDraw.clear();
+        drawGraph(graph);
+        StdDraw.filledCircle(p, 0.2, StdDraw.GREEN);
+        StdDraw.text(p, "p", StdDraw.BLACK);
+        for (Point adj : graph.get(p)) {
+          StdDraw.filledCircle(adj, 0.2, StdDraw.BLUE);
+        }
+        for (Point exp : explored.keySet()) {
+          StdDraw.filledCircle(exp, 0.15, StdDraw.YELLOW);
+          StdDraw.text(exp, Math.round(explored.get(exp))+"", StdDraw.BLACK);
+        }
+        // draw all next on list
+        for (Point next : lis) {
+          StdDraw.filledCircle(next, 0.05, StdDraw.PURPLE);
+        }
+        // draw on adjacent
+        Core.freeze("looking at p");
+        // show p
+        // show all that has been looked at and their values
 
+        //StdDraw.filledCircle(p, 0.05, StdDraw.CYAN);
+        for (Point adj : graph.get(p)) {
+          //StdDraw.filledCircle(adj, 0.05, StdDraw.YELLOW);
+          d = explored.get(p) + p.dist(adj);
+          if (explored.containsKey(adj) && d >= explored.get(adj)) {
+            continue whileLisNotEmpty;
+          }
+          //Core.freeze();
+          explored.put(adj, d);
+          // now we need to add adj to lis, but via binary insertion
+          //binaryInsert(adj, d, lis, explored);
+          lis.add(p);
+          //StdDraw.text(adj, d+"", StdDraw.GREEN);
 
-
+          /*
+          // or alternatively...:
+          int n = lis.size();
+          int i = 0;
+          while (i < n) {
+            if (d < explored.get(lis.get(i))) {
+              i++;
+            } else {
+              break;
+            }
+          }
+          lis.add(i, adj);
+          */
 
         }
-      // now that we have the spreadPoint, we must make it continue to the next
+      }
+      voro.put(a, explored);
+      //int iia = (new int[1])[1];
+
     }
-    //ArrayList<Point[]> tris = CoreGeom.getTriangles(del);
-
-    // remove edges connected to vertices of highest degree not equal to 1 or 3
 
 
+    for (Point a : voro.keySet()) {
+      StdDraw.setPenColor(playerColors.get(a));
+      for (Point p : voro.get(a).keySet()) {
+        StdDraw.filledCircle(p, 0.05);
+      }
+      StdDraw.text(a, "a", StdDraw.PURPLE);
+
+      Core.freeze("a");
+    }
 
 
-    //HashMap<Point, ArrayList<Point>> map = nodeGen(ps);
+    // closestTo = all points in G mapped to the point in voro they are closest to
+    HashMap<Point, Point> closestTo = new HashMap<Point, Point>();
+    ArrayList<Point[]> edges = new ArrayList<>();
+    Point minDistP = null;
+    for (Point p : graph.keySet()) {
+      d = Double.POSITIVE_INFINITY;
+      for (Point a : voro.keySet()) {
+
+        if (!voro.get(a).containsKey(p)) {
+          StdDraw.filledCircle(a, 0.1, StdDraw.CYAN);
+          StdDraw.text(a, "a", StdDraw.BLACK);
+          StdDraw.filledCircle(p, 0.1, StdDraw.RED);
+          StdDraw.text(p, "p", StdDraw.WHITE);
+          Core.freeze();
+        } else {
+
+        }
+
+        if (voro.get(a).get(p) < d) {
+          d = voro.get(a).get(p);
+          minDistP = a;
+        }
+      }
+      closestTo.put(p, minDistP);
+      // add edge p - adj
+      for (Point adj : graph.get(p)) {
+        if (closestTo.containsKey(adj)) {
+          if (closestTo.get(adj) != p) {
+            edges.add(new Point[]{p, adj});
+          }
+        }
+      }
+    }
+
+
+    // now draw yo
+    // draw green for all that are closest
+
 
   }
 
+  private static void binaryInsert(Point insertP, double insertCost,
+    ArrayList<Point> lis, HashMap<Point, Double> explored) {
 
-  private static class SpreadPoint {
-    public int player;
-    public Point stc, next, curr;
-    public SpreadPoint(Point src, Point curr, Point next) {
-      this.src = src;
-      this.curr = curr;
-      this.next = next;
-      path.add(src);
-      path.add(curr);
-    }
-    public ArrayList<Point> path;
-    public double pathLength() {
-      double pathLength = 0;
-      int N = path.size();
-      for (int i = 0; i < N-1; i++) {
-        pathLength += path.get(i).dist(path.get(i+1));
-      }
-      return pathLength;
+    int n = lis.size();
+    if (n == 0) {
+      lis.add(insertP);
+      return;
     }
 
+    Function<Integer, Double> cost = (index) -> {
+      return explored.get(lis.get(index));
+    };
 
-    public double distance(Point dest, Point src, HashMap<Point, ArrayList<Point>> G, ArrayList<SpreadPoint> sps) {
-      // we have dest, we have src, we have the graph they are moving on
-      // so then we move per node
-      // but we may not move to nodes that are in the path of one of the sps
+    int lo = 0;
+    int hi = n - 1;
+    double oo = cost.apply(hi) - cost.apply(lo);
+    if (oo == 0) {
+      // assume min
+      oo = 1;
+    }
 
-
-
-      // we must have a pq
-      PriorityQueue<Point> pq = new PriorityQueue<>();
-      // and keep track of current distances
-      HashMap<Point, Double> dist = new HashMap<>();
-      for (Point p : G.keySet()) {
-        dist.put(p, Double.MAX_VALUE);
-      }
-      // add current to pq
-      pq.add(src);
-      // we must have an idea of which nodes have already been explored
-      ArrayList<Point> explored = new ArrayList<>();
-      // define an off limits nodes that are in spread path
-      ArrayList<Point> offLimits = new ArrayList<>();
-      for (SpreadPoint sp : sps) {
-        for (Point p : sp.path) {
-          if (!offLimits.contains(p)) {
-            offLimits.add(p);
-          }
+    // new element is before first
+    if (oo * (insertCost - cost.apply(lo)) <= 0) {
+      lis.add(0, insertP);
+    }
+    // new element is after last
+    else if (oo * (insertCost - cost.apply(hi)) >= 0) {
+      lis.add(insertP);
+    }
+    // is in middle
+    else {
+      while (lo + 1 < hi) {
+        int mid = (lo + hi) / 2;
+        double ox = (insertCost - cost.apply(mid)) * oo;
+        // new element is after mid
+        if (ox >= 0) {
+          lo = mid;
+        }
+        // new element is before mid
+        if (ox <= 0) {
+          hi = mid;
         }
       }
-      // just make sure that the current node isn't in it
-      if (offLimits.contains(src)) {
-        offLimits.remove(src);
-      }
-
-      // loop:
-      while (pq.size() > 0) {
-        // get p from priority queue
-        Point p = pq.remove();
-        // add p to explored
-        explored.add(p);
-        // for each adj to p:
-        for (Point adj : G.get(p)) {
-          // check if offlimits
-          if (offLimits.contains(adj)) {
-            continue;
-          }
-          // now we know that adj is not offLimits
-          // first check if already explored
-          if (explored.contains(adj)) {
-            // then we have already been here.
-            // but if it is a shorted path to get there
-            double newDistance = p.dist(adj);
-            if (newDistance < dist.get(adj)) {
-              //  then we must update the path there
-              dist.put(newDistance);
-              //  and then add to pq
-              pq.add(adj);
-            }
-          } else {
-            // then we have never been here. immediately travel to it
-            pq.add(adj);
-            dist.put(adj, p.dist(adj));
-          }
-        }
-      }
-
-      // now we must just find the distance to that node
-      double distance = dist.get(dest);
+      lis.add(hi, insertP);
     }
-
-
-
-
-
-
-
   }
 
 
@@ -464,6 +579,17 @@ public class NodeGen {
     }
   }
 
+  private static void drawGraph(HashMap<Point, ArrayList<Point>> graph) {
+    double radius = 0.1;
+    StdDraw.setPenColor(StdDraw.BLACK);
+    for (Point p : graph.keySet()) {
+      StdDraw.filledCircle(p, radius);
+      for (Point adj : graph.get(p)) {
+        StdDraw.line(p, adj);
+      }
+    }
+  }
+
   private static void drawEdges(HashMap<Point, ArrayList<Point>> del) {
     StdDraw.setPenColor(StdDraw.BLACK);
     for (Point p : del.keySet()) {
@@ -471,6 +597,17 @@ public class NodeGen {
         StdDraw.line(p, adj);
       }
     }
+  }
+
+  private static Point[] isBroken(HashMap<Point, ArrayList<Point>> graph) {
+    for (Point p : graph.keySet()) {
+      for (Point adj : graph.get(p)) {
+        if (!graph.get(adj).contains(p)) {
+          return new Point[]{p, adj};
+        }
+      }
+    }
+    return null;
   }
 
 /*
