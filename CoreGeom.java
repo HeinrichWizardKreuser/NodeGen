@@ -527,16 +527,22 @@ public class CoreGeom {
     // find the owner to which each node is closest to
     for (Point p : graph.keySet()) {
       // find which owner p is closest to
-      Point minDistP = Core.randomKey(voro);
-      double minDist = voro.get(minDistP).get(p);
+      HashMap<Point, Double> cost = new HashMap<>();
       for (Point a : voro.keySet()) {
-        HashMap<Point, Double> cost = voro.get(a);
-        if (cost.get(p) < minDist) {
-          minDist = cost.get(p);
-          minDistP = a;
-        }
+        cost.put(a, voro.get(a).get(p));
       }
-      closestTo.put(p, minDistP);
+      closestTo.put(p, Core.getMinKey(cost));
+
+      // Point minDistP = Core.randomKey(voro);
+      // double minDist = voro.get(minDistP).get(p);
+      // for (Point a : voro.keySet()) {
+      //   HashMap<Point, Double> cost = voro.get(a);
+      //   if (cost.get(p) < minDist) {
+      //     minDist = cost.get(p);
+      //     minDistP = a;
+      //   }
+      // }
+      // closestTo.put(p, minDistP);
 
       // check if p is adj to an opposing owner
       for (Point adj : graph.get(p)) {
@@ -618,12 +624,11 @@ public class CoreGeom {
     ArrayList<Point> explored = new ArrayList<>();
     while (!curr.isEmpty()) {
       // find point with lowest score in cost
-      Point p = curr.get(0);
-      for (Point p1 : curr) {
-        if (cost.get(p1) < cost.get(p)) {
-          p = p1;
-        }
+      HashMap<Point, Double> map = new HashMap<>();
+      for (Point p : curr) {
+        map.put(p, cost.get(p));
       }
+      Point p = Core.getMinKey(map);
       curr.remove(p);
       // explore point
       explored.add(p);
@@ -653,9 +658,15 @@ public class CoreGeom {
    *         centroid at index 1. Index 0 and 2 contain the endpoints of the edge.
    */
   public static Point[] graphCentroid(HashMap<Point, ArrayList<Point>> graph) {
+    if (isBroken(graph) != null) {
+      Core.exit("broken graph detected");
+    }
     // map each node to the value of the longest distance to another node in the graph
     HashMap<Point, Double> furthestCosts = new HashMap<>();
     for (Point p : graph.keySet()) {
+      if (graph.get(p).isEmpty()) {
+        Core.exit("broke");
+      }
       // get the cost matrix
       HashMap<Point, Double> cost = dijkstraGraph(p, graph);
       // get the point with the highest value
@@ -666,13 +677,25 @@ public class CoreGeom {
     }
     // the node with the minimum max cost will be part of the edge containing the centroid
     Point e0 = Core.getMinKey(furthestCosts);
-    // now search among adjacent nodes for the one with the smallest furthest cost
-    Point e1 = Core.randomKey(graph.get(e0));
+
+    HashMap<Point, Double> second = new HashMap<>();
     for (Point adj : graph.get(e0)) {
-      if (furthestCosts.get(adj) < furthestCosts.get(e1)) {
-        e1 = adj;
-      }
+      second.put(adj, furthestCosts.get(adj));
     }
+    Point e1 = Core.getMaxKey(second);
+    Core.log("second.size() = " + second.size());
+    if (second.size() == 0) {
+      StdDraw.circle(e0, 0.5, StdDraw.BLACK);
+    }
+
+    // // now search among adjacent nodes for the one with the smallest furthest cost
+    // Point e1 = Core.randomKey(graph.get(e0));
+    // for (Point adj : graph.get(e0)) {
+    //   if (furthestCosts.get(adj) < furthestCosts.get(e1)) {
+    //     e1 = adj;
+    //   }
+    // }
+
     // now we have the edge. Get weighted ave on that line based on the costs
     double e0Cost = furthestCosts.get(e0), e1Cost = furthestCosts.get(e1);
 
@@ -699,5 +722,16 @@ public class CoreGeom {
       }
     }
     return graphLength/2;
+  }
+
+  public static Point[] isBroken(HashMap<Point, ArrayList<Point>> graph) {
+    for (Point p : graph.keySet()) {
+      for (Point adj : graph.get(p)) {
+        if (!graph.get(adj).contains(p)) {
+          return new Point[]{p, adj};
+        }
+      }
+    }
+    return null;
   }
 }

@@ -88,6 +88,79 @@ public final class StdDraw implements ActionListener, MouseListener, MouseMotion
     public static final Color ATOM = new Color(39,44,51);
     public static final Color LIGHT_ATOM = new Color(68,77,89);
 
+    public static String colorName(Color color) {
+      if (color.equals(BLACK)) {
+        return "BLACK";
+      } else if (color.equals(BLUE)) {
+        return "BLUE";
+      } else if (color.equals(CYAN)) {
+        return "CYAN";
+      } else if (color.equals(DARK_GRAY)) {
+        return "DARK_GRAY";
+      } else if (color.equals(GRAY)) {
+        return "GRAY";
+      } else if (color.equals(GREEN)) {
+        return "GREEN";
+      } else if (color.equals(LIGHT_GRAY)) {
+        return "LIGHT_GRAY";
+      } else if (color.equals(MAGENTA)) {
+        return "MAGENTA";
+      } else if (color.equals(ORANGE)) {
+        return "ORANGE";
+      } else if (color.equals(PINK)) {
+        return "PINK";
+      } else if (color.equals(RED)) {
+        return "RED";
+      } else if (color.equals(WHITE)) {
+        return "WHITE";
+      } else if (color.equals(YELLOW)) {
+        return "YELLOW";
+      } else if (color.equals(BOOK_BLUE)) {
+        return "BOOK_BLUE";
+      } else if (color.equals(BOOK_LIGHT_BLUE)) {
+        return "BOOK_LIGHT_BLUE";
+      } else if (color.equals(BOOK_RED)) {
+        return "BOOK_RED";
+      } else if (color.equals(PRINCETON_ORANGE)) {
+        return "PRINCETON_ORANGE";
+      } else if (color.equals(CRIMSON)) {
+        return "CRIMSON";
+      } else if (color.equals(MAROON)) {
+        return "MAROON";
+      } else if (color.equals(DEEPSKY_BLUE)) {
+        return "DEEPSKY_BLUE";
+      } else if (color.equals(INDIGO)) {
+        return "INDIGO";
+      } else if (color.equals(LAVENDER)) {
+        return "LAVENDER";
+      } else if (color.equals(AQUAMARINE)) {
+        return "AQUAMARINE";
+      } else if (color.equals(OLIVE)) {
+        return "OLIVE";
+      } else if (color.equals(LIGHTSLATE_GRAY)) {
+        return "LIGHTSLATE_GRAY";
+      } else if (color.equals(GOLD)) {
+        return "GOLD";
+      } else if (color.equals(PURPLE)) {
+        return "PURPLE";
+      } else if (color.equals(SNOW)) {
+        return "SNOW";
+      } else if (color.equals(LIGHT_LAVENDER)) {
+        return "LIGHT_LAVENDER";
+      } else if (color.equals(ATOM)) {
+        return "ATOM";
+      } else if (color.equals(LIGHT_ATOM)) {
+        return "LIGHT_ATOM";
+      } else {
+        // get rgb
+        return colorString(color);
+      }
+    }
+
+    public static String colorString(Color c) {
+      return "["+c.getRed()+", "+c.getGreen()+", "+c.getBlue()+"]";
+    }
+
     public static Color randomColor(){
         return new Color( (int)(Math.random()*256), (int)(Math.random()*256), (int)(Math.random()*256) );
     }

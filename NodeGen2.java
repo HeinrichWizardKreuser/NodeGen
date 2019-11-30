@@ -2,7 +2,10 @@ import java.util.*;
 import java.util.function.Function;
 import java.awt.Color;
 
-public class NodeGen2 {
+public class NodeGen {
+
+  // stores the location of each player and each pf their colors
+  public static HashMap<Point, Color> playerColors = null;
 
   public static void main(String[] args) {
     int size = 10;
@@ -14,13 +17,12 @@ public class NodeGen2 {
       }
     }
 
-
     // declare space
     int w = 10;
     int h = 10;
 
+    // phase 1.1
     ArrayList<Point> ps = generatePoints(w, h, size);
-
 
     // draw the points
     int pixls = 80;
@@ -28,11 +30,290 @@ public class NodeGen2 {
     StdDraw.setXscale(0, w);
     StdDraw.setYscale(0, h);
 
+    // phase 1.2
+    HashMap<Point, ArrayList<Point>> G = createGraph(ps);
+
+    // phase 2.1
+    int players = 4;
+    HashMap<Point, ArrayList<Point>> graph = generatePlayerSpawns(G, players);
+
+    // create array list of all player spawns
+    ArrayList<Point> vlis = new ArrayList<>();
+    for (Point p : playerColors.keySet()) {
+      vlis.add(p);
+    }
+    // phase 2.2
+    HashMap<Point, HashMap<Point, ArrayList<Point>>> subgraphs = CoreGeom.voronoiGraph(vlis, graph);
+    for (Point player : subgraphs.keySet()) {
+      HashMap<Point, ArrayList<Point>> subgraph = subgraphs.get(player);
+      drawEdges(subgraph, playerColors.get(player));
+    }
+
+
+    while (!acceptable(vlis, subgraphs)) {
+      // 1) first set spawn points at centroids
+
+      Core.freeze();
+      // remove spawn points
+      for (Point spawn : vlis) {
+        ArrayList<Point> e = graph.get(spawn);
+        if (e.size() != 2) {
+          Core.exit("e.size() != 2");
+        }
+        Point left = e.get(0);
+        Point right = e.get(1);
+        // severing its connections between its edge's endpoints
+        graph.get(spawn).remove(left);
+        graph.get(left).remove(spawn);
+        graph.get(spawn).remove(right);
+        graph.get(right).remove(spawn);
+        // removing spawn
+        graph.remove(spawn);
+        // connecting the endpoints to each other (as they originally were)
+        graph.get(left).add(right);
+        graph.get(right).add(left);
+      }
+
+      StdDraw.clear(StdDraw.WHITE);
+      drawGraph(graph, StdDraw.BLACK);
+      Core.freeze("removed spawn points");
+
+
+      // Get the centroid of each graphs
+      HashMap<Point, Point[]> centroids = new HashMap<>();
+      for (Point player : subgraphs.keySet()) {
+        HashMap<Point, ArrayList<Point>> subgraph = subgraphs.get(player);
+
+
+        ArrayList<Point> e = subgraph.get(player);
+        if (e.size() != 2) {
+          Core.exit("e.size() != 2");
+        }
+        Point left = e.get(0);
+        Point right = e.get(1);
+        // severing its connections between its edge's endpoints
+        subgraph.get(player).remove(left);
+        subgraph.get(left).remove(player);
+        subgraph.get(player).remove(right);
+        subgraph.get(right).remove(player);
+        // removing player
+        subgraph.remove(player);
+        // connecting the endpoints to each other (as they originally were)
+        subgraph.get(left).add(right);
+        subgraph.get(right).add(left);
+        // now find the centroid
+
+        Point[] centroi = CoreGeom.graphCentroid(subgraph);
+        Point centroid = centroi[1];
+        // draw centroid
+        Color color = playerColors.get(player);
+        StdDraw.filledSquare(centroid, 0.05, color);
+        // look for which edge it belongs to
+        // calc which edges of original graph have the centroids
+        int i = 0;
+        for (Point a : graph.keySet()) {
+          for (Point b : graph.get(a)) {
+            if (Core.epsilon(a.dist(centroid) + centroid.dist(b), a.dist(b))) {
+              // then we have found the edge
+              // save centroid
+              centroids.put(player, new Point[]{a, centroid, b});
+              i++;
+              if (i > 2) {
+                Core.freeze("I've got a bad feeling about this...");
+              }
+            }
+          }
+        }
+      }
+
+      // now we have the centroids and where they are
+      Core.freeze("these are the centroids");
+
+      // change spawn points to coordinates of centroid
+      for (Point spawn : vlis) {
+        // get player centroid
+        Point[] centroi = centroids.get(spawn);
+        Point left = centroi[0], centroid = centroi[1], right = centroi[2];
+        // set spawn's coordinates
+        spawn.setTo(centroid);
+        // sever left from right
+        graph.get(left).remove(right);
+        graph.get(right).remove(left);
+        // add spawn
+        graph.put(spawn, new ArrayList<Point>());
+        // connect left and right to centroid
+        graph.get(spawn).add(left);
+        graph.get(left).add(spawn);
+        graph.get(spawn).add(right);
+        graph.get(right).add(spawn);
+      }
+
+      StdDraw.clear(StdDraw.WHITE);
+      drawGraph(graph, StdDraw.BLACK);
+      for (Point player : vlis) {
+        StdDraw.filledCircle(player, 0.05, playerColors.get(player));
+      }
+      Core.freeze("added new spawn points as centroids");
+
+      // 2) now get the new subgraphs
+      subgraphs = CoreGeom.voronoiGraph(vlis, graph);
+      Core.log("-");
+    }
+  }
+
+  public static boolean acceptable(
+    ArrayList<Point> vlis,
+    HashMap<Point, HashMap<Point, ArrayList<Point>>> subgraphs) {
+
+    // get the lengths of each graph.
+    int players = vlis.size();
+    double[] lengths = new double[players];
+    for (int i = 0; i < players; i++) {
+      Point player = vlis.get(i);
+      HashMap<Point, ArrayList<Point>> subgraph = subgraphs.get(player);
+      lengths[i] = CoreGeom.graphLength(subgraph);
+    }
+
+    // get stdev
+    double stddev = StdStats.stddev(lengths);
+    double mean = StdStats.mean(lengths);
+    // check whether any are out of range
+    for (double length : lengths) {
+      if (Math.abs(length - mean) > stddev) {
+        // report unnacceptable:
+        Core.log("unnacceptable");
+        System.out.println("lengths: ");
+        for (int i = 0; i < players; i++) {
+          System.out.println("\t"+StdDraw.colorName(playerColors.get(vlis.get(i)))+" = "+lengths[i]);
+        }
+        System.out.println();
+        System.out.println("stddev = " + stddev);
+        System.out.println("mean = " + mean);
+
+        return false;
+      }
+    }
+
+    Core.log("ACCEPTED Graph!!");
+    System.out.println("lengths: ");
+    for (int i = 0; i < players; i++) {
+      System.out.println("\t"+StdDraw.colorName(playerColors.get(vlis.get(i)))+" = "+lengths[i]);
+    }
+    System.out.println();
+    System.out.println("stddev = " + stddev);
+    System.out.println("mean = " + mean);
+    return true;
+  }
+
+  // phase 2.1
+  public static HashMap<Point, ArrayList<Point>> generatePlayerSpawns(
+    HashMap<Point, ArrayList<Point>> G, int players) {
+    // now onto phase 2:
+    // we must perform voronoi on the map
+    // first choose random places to place players
+    int amnt = players;
+    // copy graph of G
+    HashMap<Point, ArrayList<Point>> H = new HashMap<>();
+    for (Point p : G.keySet()) {
+      ArrayList<Point> adj = new ArrayList<>();
+      for (Point a : G.get(p)) {
+        adj.add(a);
+      }
+      H.put(p, adj);
+    }
+    Point[] playerSpawns = new Point[4];
+    // make copy of graph
+    HashMap<Point, ArrayList<Point>> graph = new HashMap<>();
+    for (Point p : G.keySet()) {
+      ArrayList<Point> adj = new ArrayList<>();
+      for (Point a : G.get(p)) {
+        adj.add(a);
+      }
+      graph.put(p, adj);
+    }
+    while (amnt > 0) {
+      // choose random point in H
+      Point rand = Core.randomKey(H);
+      // choose a random edge
+      Point adj = H.get(rand).get((int)(Math.random()*H.get(rand).size()));
+      // add new spread point there
+      double randDouble = Math.random();
+      Core.log("randDouble = " + randDouble);
+      // Point playerSpawn = new Point((rand.x + adj.x)*randDouble, (rand.y + adj.y)*randDouble);
+      Point playerSpawn = new Point(rand.x*randDouble + adj.x*(1-randDouble), rand.y*randDouble + adj.y*(1-randDouble));
+      // add to player spawns
+      playerSpawns[--amnt] = playerSpawn;
+      // remove them from H
+      ArrayList<Point> adjToRand = new ArrayList<>();
+      for (Point p : H.get(rand)) {
+        adjToRand.add(p);
+      }
+      ArrayList<Point> adjToAdj = new ArrayList<>();
+      for (Point p : H.get(adj)) {
+        adjToAdj.add(p);
+      }
+      for (Point p : adjToRand) {
+        H.get(rand).remove(p);
+        H.get(p).remove(rand);
+      }
+      for (Point p : adjToAdj) {
+        H.get(adj).remove(p);
+        H.get(p).remove(adj);
+      }
+      H.remove(rand);
+      H.remove(adj);
+
+      // now make the edit to graph
+      // add spawn to graph
+      graph.put(playerSpawn, new ArrayList<Point>());
+      // add connection to adj and rand
+      graph.get(playerSpawn).add(rand);
+      graph.get(playerSpawn).add(adj);
+      graph.get(rand).add(playerSpawn);
+      graph.get(adj).add(playerSpawn);
+      // sever connection between rand and adj
+      graph.get(rand).remove(adj);
+      graph.get(adj).remove(rand);
+    }
+
+    StdDraw.clear(StdDraw.WHITE);
+    drawGraph(graph);
+    if (isBroken(graph) != null) {
+      Core.exit("broke graph pre post_fix.png");
+    }
+
+    playerColors = new HashMap<>();
+    playerColors.put(playerSpawns[0], StdDraw.RED);
+    playerColors.put(playerSpawns[1], StdDraw.BLUE);
+    playerColors.put(playerSpawns[2], StdDraw.GREEN);
+    playerColors.put(playerSpawns[3], StdDraw.PURPLE);
+    // draw all player spawns on G
+    for (Point p : playerSpawns) {
+      StdDraw.setPenColor(playerColors.get(p));
+      StdDraw.filledCircle(p.x, p.y, 0.075);
+    }
+    StdDraw.save("players.png");
+    // int iia = (new int[1])[1];
+
+    // now we have player spawns, perform voronoi
+    // now add the playerSpawns
+    ArrayList<Point> vlis = new ArrayList<>();
+    for (Point p : playerSpawns) {
+      vlis.add(p);
+    }
+
+    return graph;
+  }
+
+  // phase 1.2
+  public static HashMap<Point, ArrayList<Point>> createGraph(ArrayList<Point> ps) {
+
     // delaunize points
     HashMap<Point, ArrayList<Point>> del = Delaunay.delaunize(ps);
     StdDraw.clear(StdDraw.WHITE);
     drawGraph(del);
     StdDraw.save("del.png");
+
 
     // create graph G
     HashMap<Point, ArrayList<Point>> G = new HashMap<>();
@@ -154,389 +435,15 @@ public class NodeGen2 {
     }
     StdDraw.save("post_fix.png");
 
-
-//__________________________________________________________________________________________________
-// =================================================================================================
-//__________________________________________________________________________________________________
-
-    // now onto phase 2:
-    // we must perform voronoi on the map
-    // first choose random places to place players
-    int players = 4;
-    int amnt = players;
-    // copy graph of G
-    HashMap<Point, ArrayList<Point>> H = new HashMap<>();
-    for (Point p : G.keySet()) {
-      ArrayList<Point> adj = new ArrayList<>();
-      for (Point a : G.get(p)) {
-        adj.add(a);
-      }
-      H.put(p, adj);
-    }
-    Point[] playerSpawns = new Point[4];
-    // make copy of graph
-    HashMap<Point, ArrayList<Point>> graph = new HashMap<>();
-    for (Point p : G.keySet()) {
-      ArrayList<Point> adj = new ArrayList<>();
-      for (Point a : G.get(p)) {
-        adj.add(a);
-      }
-      graph.put(p, adj);
-    }
-    while (amnt > 0) {
-      // choose random point in H
-      Point rand = Core.randomKey(H);
-      // choose a random edge
-      Point adj = H.get(rand).get((int)(Math.random()*H.get(rand).size()));
-      // add new spread point there
-      double randDouble = Math.random();
-      Core.log("randDouble = " + randDouble);
-      // Point playerSpawn = new Point((rand.x + adj.x)*randDouble, (rand.y + adj.y)*randDouble);
-      Point playerSpawn = new Point(rand.x*randDouble + adj.x*(1-randDouble), rand.y*randDouble + adj.y*(1-randDouble));
-      // add to player spawns
-      playerSpawns[--amnt] = playerSpawn;
-      // remove them from H
-      ArrayList<Point> adjToRand = new ArrayList<>();
-      for (Point p : H.get(rand)) {
-        adjToRand.add(p);
-      }
-      ArrayList<Point> adjToAdj = new ArrayList<>();
-      for (Point p : H.get(adj)) {
-        adjToAdj.add(p);
-      }
-      for (Point p : adjToRand) {
-        H.get(rand).remove(p);
-        H.get(p).remove(rand);
-      }
-      for (Point p : adjToAdj) {
-        H.get(adj).remove(p);
-        H.get(p).remove(adj);
-      }
-      H.remove(rand);
-      H.remove(adj);
-
-      // now make the edit to graph
-      // add spawn to graph
-      graph.put(playerSpawn, new ArrayList<Point>());
-      // add connection to adj and rand
-      graph.get(playerSpawn).add(rand);
-      graph.get(playerSpawn).add(adj);
-      graph.get(rand).add(playerSpawn);
-      graph.get(adj).add(playerSpawn);
-      // sever connection between rand and adj
-      graph.get(rand).remove(adj);
-      graph.get(adj).remove(rand);
-    }
-
-    StdDraw.clear(StdDraw.WHITE);
-    drawGraph(graph);
-    if (isBroken(graph) != null) {
-      Core.exit("broke graph pre post_fix.png");
-    }
-
-    playerColors = new HashMap<>();
-    playerColors.put(playerSpawns[0], StdDraw.RED);
-    playerColors.put(playerSpawns[1], StdDraw.BLUE);
-    playerColors.put(playerSpawns[2], StdDraw.GREEN);
-    playerColors.put(playerSpawns[3], StdDraw.PURPLE);
-    // draw all player spawns on G
-    for (Point p : playerSpawns) {
-      StdDraw.setPenColor(playerColors.get(p));
-      StdDraw.filledCircle(p.x, p.y, 0.075);
-    }
-    StdDraw.save("players.png");
-    // int iia = (new int[1])[1];
-
-    // now we have player spawns, perform voronoi
-    // now add the playerSpawns
-    ArrayList<Point> vlis = new ArrayList<>();
-    for (Point p : playerSpawns) {
-      vlis.add(p);
-    }
-
-
-
-    HashMap<Point, HashMap<Point, ArrayList<Point>>> subgraphs = voronoiGraph(vlis, graph);
-
-    // now draw the subgraphs
-    StdDraw.clear(StdDraw.WHITE);
-    for (Point player : subgraphs.keySet()) {
-      HashMap<Point, ArrayList<Point>> subgraph = subgraphs.get(player);
-      Color color = playerColors.get(player);
-      drawGraph(subgraph, color);
-    }
-
-    Core.freeze();
-
-    // get the lengths of each graph.
-    // if the lengths are not within acceptable range, move the spawn points to
-      // the centroids of these subgraphs
-
-    // with subgraphs succesfully gotten, we must get the centroid of these graphs
-    for (Point player : subgraphs.keySet()) {
-      HashMap<Point, ArrayList<Point>> subgraph = subgraphs.get(player);
-      Color color = playerColors.get(player);
-      Point centroid = graphCentroid(subgraph)[1];
-      StdDraw.filledSquare(centroid, 0.05, color);
-    }
-
-    // now we have the centroid...what now?
-    // now we need to move the spawn zone to this point.
-    // to do this, we must (for each spawn point):
-      // remove the spawn point by
-        // severing its connections between its edge's endpoints
-        // connecting the endpoints to each other (as they originally were)
-      // place spawn points at the coordinates of the centroids
-
-    // re do voronoization and get new pathlengths
-    // repeat until lengths are optimal
+    return G;
   }
 
-
-  // get the centroid from the given graph
-  public static Point[] graphCentroid(HashMap<Point, ArrayList<Point>> graph) {
-    // map each node to the value of the longest distance to another node in the graph
-    HashMap<Point, Double> furthestCosts = new HashMap<>();
-    for (Point p : graph.keySet()) {
-      // get the cost matrix
-      HashMap<Point, Double> cost = CoreGeom.dijkstraGraph(p, graph);
-      // get the point with the highest value
-      Point furthest = Core.getMaxKey(cost);
-      double furthestCost = cost.get(furthest);
-      // add to mapping
-      furthestCosts.put(p, furthestCost);
-    }
-    // the node with the minimum max cost will be part of the edge containing the centroid
-    Point e0 = Core.getMinKey(furthestCosts);
-    // now search among adjacent nodes for the one with the smallest furthest cost
-    Point e1 = Core.randomKey(graph.get(e0));
-    for (Point adj : graph.get(e0)) {
-      if (furthestCosts.get(adj) < furthestCosts.get(e1)) {
-        e1 = adj;
-      }
-    }
-    // now we have the edge. Get weighted ave on that line based on the costs
-    double e0Cost = furthestCosts.get(e0), e1Cost = furthestCosts.get(e1);
-
-    double d = e0Cost/(e0Cost + e1Cost);
-
-    Point ave = new Point(e0, e1, d);
-
-    return new Point[]{e0, ave, e1};
-  }
-
-  public static HashMap<Point, Color> playerColors = null;
-
-  public static HashMap<Point, HashMap<Point, ArrayList<Point>>> voronoiGraph(
-    ArrayList<Point> vlis,
-    HashMap<Point, ArrayList<Point>> graph) {
-
-    // voro = map of distance between playerspawns and their distnaces to other points in the graph
-    HashMap<Point, HashMap<Point, Double>> voro = new HashMap<Point, HashMap<Point, Double>>();
-
-    // let's just do a breadth first search
-    for (Point a : vlis) {
-
-      ArrayList<Point> curr = new ArrayList<>();
-      curr.add(a);
-      HashMap<Point, Double> cost = new HashMap<>();
-      cost.put(a, 0d);
-      ArrayList<Point> explored = new ArrayList<>();
-      while (!curr.isEmpty()) {
-        // find point with lowest score in cost
-        Point p = curr.get(0);
-        for (Point p1 : curr) {
-          if (cost.get(p1) < cost.get(p)) {
-            p = p1;
-          }
-        }
-        curr.remove(p);
-        // explore point
-        explored.add(p);
-        // now go to all adjacent points
-        for (Point adj : graph.get(p)) {
-          double newDist = cost.get(p) + p.dist(adj);
-          if (explored.contains(adj) && newDist > cost.get(adj)) {
-            continue;
-          }
-          curr.add(adj);
-          explored.add(adj);
-          cost.put(adj, newDist);
-
-          // StdDraw.filledCircle(adj, 0.05, StdDraw.CYAN);
-          // StdDraw.text(adj, Math.round(cost.get(adj))+"", StdDraw.RED);
-          // Core.freeze();
-        }
-      }
-      // print out cost
-      // System.out.println("____________________");
-      // for (Point p : cost.keySet()) {
-      //   System.out.println(p.toString() + " = " + cost.get(p));
-      // }
-
-      voro.put(a, cost);
-    }
-
-    // closestTo = all points in G mapped to the point in voro they are closest to
-    HashMap<Point, Point> closestTo = new HashMap<Point, Point>();
-    // edgeConflicts = list of all edges that have endpoints closer to opposing players
-    ArrayList<Point[]> edgeConflicts = new ArrayList<>();
-    // edgeFriendly = list of all edges of which both ends belong to the same player
-    ArrayList<Point[]> edgeFriendly = new ArrayList<>();
-    // find the player to which each node is closest to
-    for (Point p : graph.keySet()) {
-      // Core.println("____");
-      // find which player p is closest to
-      Point minDistP = Core.randomKey(voro);
-      double minDist = voro.get(minDistP).get(p);
-      for (Point a : voro.keySet()) {
-        HashMap<Point, Double> cost = voro.get(a);
-        // Core.log("comparing: minDist " + minDist + " < " + cost.get(p));
-        if (cost.get(p) < minDist) {
-          minDist = cost.get(p);
-          minDistP = a;
-        }
-      }
-      // if (minDistP == null) {
-      //   Core.exit("minDistP == null");
-      // }
-      // Core.log("winner = " + minDist);
-      closestTo.put(p, minDistP);
-
-      // check if p is adj to an opposing player
-      for (Point adj : graph.get(p)) {
-        // if adj has also been treated
-        if (closestTo.containsKey(adj)) {
-          // are they closer to different players?
-          if (closestTo.get(adj) != p) {
-            edgeConflicts.add(new Point[]{p, adj});
-          } else {
-            edgeFriendly.add(new Point[]{p, adj});
-          }
-        }
-      }
-    }
-
-    // define the edges on which there are conflicts
-    HashMap<Point[], Point> borders = new HashMap<>();
-    // HashMap<Point, Point> borderAccess = new HashMap<>();
-    for (Point[] e : edgeConflicts) {
-      double d = e[0].dist(e[1]);
-      double len = (voro.get(closestTo.get(e[0])).get(e[0]) +
-                    voro.get(closestTo.get(e[1])).get(e[1]) + d)/2 -
-                    voro.get(closestTo.get(e[0])).get(e[0]);
-
-      Point border = new Point(e[0], e[1], 1 - len/d);
-      borders.put(e, border);
-
-      // borderAccess.put(e[0], border);
-      // borderAccess.put(e[1], border);
-    }
-
-    StdDraw.clear(StdDraw.WHITE);
-    //drawGraph(graph);
-    // draw the friendly edges
-    for (Point[] e : edgeFriendly) {
-      StdDraw.line(e[0], e[1], playerColors.get(e[0]));
-    }
-    // draw the border lines
-    for (Point[] e : borders.keySet()) {
-      StdDraw.line(e[0], borders.get(e), playerColors.get(closestTo.get(e[0])));
-      StdDraw.line(e[1], borders.get(e), playerColors.get(closestTo.get(e[1])));
-    }
-
-    // color all nodes in the color of the player they are closest to
-    for (Point p : graph.keySet()) {
-      Point belongsTo = closestTo.get(p);
-      StdDraw.filledCircle(p, 0.05, playerColors.get(belongsTo));
-    }
-    // make the specific spawns a bit bigger
-    for (Point p : voro.keySet()) {
-      StdDraw.filledCircle(p, 0.075, playerColors.get(p));
-    }
-
-    StdDraw.save("voronoi.png");
-    Core.freeze();
-
-    // __________________BALANCING______________________
-    // create subgraph of each player
-    HashMap<Point, HashMap<Point, ArrayList<Point>>> subgraphs = new HashMap<>();
-    for (Point p : voro.keySet()) {
-      subgraphs.put(p, new HashMap<>());
-    }
-    // add each point
-    for (Point p : graph.keySet()) {
-      // check which player this belongs to
-      Point belongsTo = closestTo.get(p);
-      HashMap<Point, ArrayList<Point>> subgraph = subgraphs.get(belongsTo);
-      subgraph.put(p, new ArrayList<Point>());
-      for (Point adj : graph.get(p)) {
-        Point adjBelongsTo = closestTo.get(adj);
-        if (belongsTo == adjBelongsTo) {
-          subgraph.get(p).add(adj); // we do not do this for adj to p since that will be done on its own
-        } else {
-          // find border that has this node and adj in edge
-          for (Point[] e : borders.keySet()) {
-            if ((e[0] == p && e[1] == adj) || (e[0] == adj && e[1] == p)) {
-              Point border = borders.get(e);
-              // now we must add a new node - from borderAccess
-              subgraph.get(p).add(border);
-              // however we will do the border to p for this case
-              subgraph.put(border, new ArrayList<Point>());
-              subgraph.get(border).add(p);
-              break;
-            }
-          }
-        }
-      }
-    }
-
-
-    return subgraphs;
-  }
-
-
-
-  private static void drawGraph(HashMap<Point, ArrayList<Point>> graph) {
-    double radius = 0.1;
-    StdDraw.setPenColor(StdDraw.BLACK);
-    for (Point p : graph.keySet()) {
-      StdDraw.filledCircle(p, radius);
-      for (Point adj : graph.get(p)) {
-        StdDraw.line(p, adj);
-      }
-    }
-  }
-
-  private static void drawGraph(HashMap<Point, ArrayList<Point>> graph, Color color) {
-    double radius = 0.1;
-    StdDraw.setPenColor(color);
-    for (Point p : graph.keySet()) {
-      StdDraw.filledCircle(p, radius);
-      for (Point adj : graph.get(p)) {
-        StdDraw.line(p, adj);
-      }
-    }
-  }
-
-
-  private static Point[] isBroken(HashMap<Point, ArrayList<Point>> graph) {
-    for (Point p : graph.keySet()) {
-      for (Point adj : graph.get(p)) {
-        if (!graph.get(adj).contains(p)) {
-          return new Point[]{p, adj};
-        }
-      }
-    }
-    return null;
-  }
-
+  // phase 1.1
   private static ArrayList<Point> generatePoints(int w, int h, int size) {
     double x0 = 0, x1 = w, y0 = 0, y1 = h;
 
     // create a list of random nodes in the space
     ArrayList<Point> ps = CoreGeom.randomPoints(w, h, size, 1);
-
 
     // find current box
     double left = ps.get(0).x, top = ps.get(0).y;
@@ -586,4 +493,50 @@ public class NodeGen2 {
 
     return ps;
   }
+
+  private static void drawGraph(HashMap<Point, ArrayList<Point>> graph) {
+    double radius = 0.1;
+    StdDraw.setPenColor(StdDraw.BLACK);
+    for (Point p : graph.keySet()) {
+      StdDraw.filledCircle(p, radius);
+      for (Point adj : graph.get(p)) {
+        StdDraw.line(p, adj);
+      }
+    }
+  }
+
+  private static void drawGraph(HashMap<Point, ArrayList<Point>> graph, Color color) {
+    double radius = 0.1;
+    StdDraw.setPenColor(color);
+    for (Point p : graph.keySet()) {
+      StdDraw.filledCircle(p, radius);
+      for (Point adj : graph.get(p)) {
+        StdDraw.line(p, adj);
+      }
+    }
+  }
+
+  private static void drawEdges(HashMap<Point, ArrayList<Point>> graph, Color color) {
+    double radius = 0.1;
+    StdDraw.setPenColor(color);
+    for (Point p : graph.keySet()) {
+      for (Point adj : graph.get(p)) {
+        StdDraw.line(p, adj);
+      }
+    }
+  }
+
+
+  private static Point[] isBroken(HashMap<Point, ArrayList<Point>> graph) {
+    for (Point p : graph.keySet()) {
+      for (Point adj : graph.get(p)) {
+        if (!graph.get(adj).contains(p)) {
+          return new Point[]{p, adj};
+        }
+      }
+    }
+    return null;
+  }
+
+
 }
