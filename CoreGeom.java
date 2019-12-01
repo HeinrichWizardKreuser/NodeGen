@@ -13,6 +13,7 @@ import java.util.*;
 //for library & sorting
 import java.util.HashMap;
 import java.util.ArrayList;
+import java.util.HashSet;
 //for sorting
 import java.util.Collections;
 import java.util.Comparator;
@@ -533,17 +534,6 @@ public class CoreGeom {
       }
       closestTo.put(p, Core.getMinKey(cost));
 
-      // Point minDistP = Core.randomKey(voro);
-      // double minDist = voro.get(minDistP).get(p);
-      // for (Point a : voro.keySet()) {
-      //   HashMap<Point, Double> cost = voro.get(a);
-      //   if (cost.get(p) < minDist) {
-      //     minDist = cost.get(p);
-      //     minDistP = a;
-      //   }
-      // }
-      // closestTo.put(p, minDistP);
-
       // check if p is adj to an opposing owner
       for (Point adj : graph.get(p)) {
         // if adj has also been treated
@@ -621,7 +611,7 @@ public class CoreGeom {
     curr.add(a);
     HashMap<Point, Double> cost = new HashMap<>();
     cost.put(a, 0d);
-    ArrayList<Point> explored = new ArrayList<>();
+    HashSet<Point> explored = new HashSet<>();
     while (!curr.isEmpty()) {
       // find point with lowest score in cost
       HashMap<Point, Double> map = new HashMap<>();
@@ -643,67 +633,114 @@ public class CoreGeom {
         cost.put(adj, newDist);
       }
     }
-
     return cost;
   }
 
   /**
-   * Finds the centroid of the graph. That is, the node that is at the "centre"
-   * (in terms of distance) of the graph. It creates a new node to represent this
-   * and it lies on an edge of the graph.
+   * Given a starting starting and ending node on a given graph, it performs
+   * A* pathfinding. It is an adaption of dijkstra for only finding the path
+   * to another node and not necessarily the cost of all nodes from a certain
+   * node.
+   *
+   * @param graph is all of the points on the graph mapped to all other points
+   *        that they are adjacent to in the graph.
+   * @param start the starting node.
+   * @param end the node to pathfind to.
+   * @return an arraylist that represents the shortest path from start to end on
+   *         the graph.
+   */
+  public static ArrayList<Point> aStar(
+    HashMap<Point, ArrayList<Point>> graph,
+    Point start,
+    Point end) {
+
+    ArrayList<Point> curr = new ArrayList<>();
+    curr.add(start);
+    HashMap<Point, Double> cost = new HashMap<>();
+    cost.put(start, start.dist(end));
+    HashSet<Point> explored = new HashSet<>();
+    HashMap<Point, Point> parents = new HashMap<>();
+    while (!curr.isEmpty()) {
+      // find point with lowest score in cost
+      HashMap<Point, Double> map = new HashMap<>();
+      for (Point p : curr) {
+        map.put(p, cost.get(p));
+      }
+      Point p = Core.getMinKey(map);
+      // check if done
+      if (p == end) {
+        break;
+      }
+      curr.remove(p);
+      // explore point
+      explored.add(p);
+      // now go to all adjacent points
+      for (Point adj : graph.get(p)) {
+        double newDist = cost.get(p) + p.dist(adj) + adj.dist(end);
+        // double newDist = cost.get(p) + p.dist(adj);
+        if (explored.contains(adj) && newDist > cost.get(adj)) {
+          continue;
+        }
+        curr.add(adj);
+        explored.add(adj);
+        cost.put(adj, newDist);
+        parents.put(adj, p);
+      }
+    }
+
+    // get the path by popping the parents
+    ArrayList<Point> path = new ArrayList<>();
+    Point parent = end;
+    do {
+      path.add(parent);
+      parent = parents.get(parent);
+    } while (parent != null);
+    Collections.reverse(path);
+    return path;
+  }
+
+  /**
+   * Finds the absolute center of the graph, assuming that the graph is a tree.
+   * It creates a new node to represent this and returns it along with the end
+   * points of the edge it exists on.
    *
    * @param graph is all of the points on the graph mapped to all other points
    *        that they are adjacent to in the graph
    * @return an ordered size3 array that contains a new node that represents the
    *         centroid at index 1. Index 0 and 2 contain the endpoints of the edge.
    */
-  public static Point[] graphCentroid(HashMap<Point, ArrayList<Point>> graph) {
-    if (isBroken(graph) != null) {
-      Core.exit("broken graph detected");
-    }
-    // map each node to the value of the longest distance to another node in the graph
-    HashMap<Point, Double> furthestCosts = new HashMap<>();
-    for (Point p : graph.keySet()) {
-      if (graph.get(p).isEmpty()) {
-        Core.exit("broke");
+  public static Point[] absoluteCentre(
+    HashMap<Point, ArrayList<Point>> graph) {
+
+    // pick a random point
+    Point rand = Core.randomKey(graph);
+    // get the node with furthest distance from rand
+    HashMap<Point, Double> cost = dijkstraGraph(rand, graph);
+    Point v0 = Core.getMaxKey(cost);
+    // now get the firthest distance from that node
+    cost = CoreGeom.dijkstraGraph(v0, graph);
+    Point v1 = Core.getMaxKey(cost);
+    // now get path from v0 to v1
+    ArrayList<Point> path = aStar(graph, v0, v1);
+    double pathLength = CoreGeom.lineLength(path);
+    // now find the midway point
+    double toGo = pathLength / 2;
+    Point curr = path.remove(0);
+    while (toGo > 0) {
+      Point next = path.remove(0);
+      double nextDist = curr.dist(next);
+      // if what we still need to travel is more than next dist, then travel
+      if (nextDist < toGo) {
+        curr = next;
+        toGo -= nextDist;
+      } else {
+        // then next is will not be reached. from curr to next is the final.
+        Point centroid = new Point(curr, next, 1 - toGo / curr.dist(next));
+        return new Point[]{curr, centroid, next};
       }
-      // get the cost matrix
-      HashMap<Point, Double> cost = dijkstraGraph(p, graph);
-      // get the point with the highest value
-      Point furthest = Core.getMaxKey(cost);
-      double furthestCost = cost.get(furthest);
-      // add to mapping
-      furthestCosts.put(p, furthestCost);
-    }
-    // the node with the minimum max cost will be part of the edge containing the centroid
-    Point e0 = Core.getMinKey(furthestCosts);
-
-    HashMap<Point, Double> second = new HashMap<>();
-    for (Point adj : graph.get(e0)) {
-      second.put(adj, furthestCosts.get(adj));
-    }
-    Point e1 = Core.getMaxKey(second);
-    Core.log("second.size() = " + second.size());
-    if (second.size() == 0) {
-      StdDraw.circle(e0, 0.5, StdDraw.BLACK);
     }
 
-    // // now search among adjacent nodes for the one with the smallest furthest cost
-    // Point e1 = Core.randomKey(graph.get(e0));
-    // for (Point adj : graph.get(e0)) {
-    //   if (furthestCosts.get(adj) < furthestCosts.get(e1)) {
-    //     e1 = adj;
-    //   }
-    // }
-
-    // now we have the edge. Get weighted ave on that line based on the costs
-    double e0Cost = furthestCosts.get(e0), e1Cost = furthestCosts.get(e1);
-
-    double d = e0Cost/(e0Cost + e1Cost);
-
-    Point ave = new Point(e0, e1, d);
-
-    return new Point[]{e0, ave, e1};
+    throw new RuntimeException("Could not path find");
   }
 
   /**
@@ -724,14 +761,77 @@ public class CoreGeom {
     return graphLength/2;
   }
 
-  public static Point[] isBroken(HashMap<Point, ArrayList<Point>> graph) {
+  /**
+   * Checks that if a point a is connected to b that b is also connect to a
+   *
+   * @param graph is all of the points on the graph mapped to all other points
+   *        that they are adjacent to in the graph
+   * @return true if the graph is an undirected graph.
+   */
+  public static boolean isUndirected(HashMap<Point, ArrayList<Point>> graph) {
+    // check that all nodes have consensus
     for (Point p : graph.keySet()) {
       for (Point adj : graph.get(p)) {
         if (!graph.get(adj).contains(p)) {
-          return new Point[]{p, adj};
+          return false;
         }
       }
     }
-    return null;
+    return true;
+  }
+
+  /**
+   * Checks if any node can travel to any other node in the graph.
+   * Assumes that the graph is undirected.
+   *
+   * @param graph is all of the points on the graph mapped to all other points
+   *        that they are adjacent to in the graph
+   * @return true if the graph is a connected graph.
+   */
+  public static boolean isConnected(HashMap<Point, ArrayList<Point>> graph) {
+    if (graph.isEmpty()) {
+      throw new IllegalArgumentException("graph is empty");
+    }
+    Stack<Point> stack = new Stack<>();
+    stack.push(Core.randomKey(graph));
+    HashSet<Point> explored = new HashSet<>();
+    while (stack.isEmpty()) {
+      Point p = stack.pop();
+      for (Point adj : graph.get(p)) {
+        if (!explored.contains(adj)) {
+          explored.add(adj);
+          stack.push(adj);
+        }
+      }
+    }
+    return explored.size() != graph.size();
+  }
+
+  public static void sever(Point a, Point b, HashMap<Point, ArrayList<Point>> graph) {
+    graph.get(a).remove(b);
+    graph.get(b).remove(a);
+  }
+
+  public static void connect(Point a, Point b, HashMap<Point, ArrayList<Point>> graph) {
+    graph.get(a).add(b);
+    graph.get(b).add(a);
+  }
+
+
+  /**
+   * Calculates the length of the given line.
+   *
+   * @param line is a list of points where each point is connected to the points
+   *        with index 1 less or 1 more than it.
+   * @return the calculated path length of the line.
+   */
+  public static double lineLength(ArrayList<Point> line) {
+    double lineLength = 0;
+    int N = line.size();
+    for (int i = 0; i < N - 1; i++) {
+      Point curr = line.get(i), next = line.get(i + 1);
+      lineLength += curr.dist(next);
+    }
+    return lineLength;
   }
 }

@@ -36,6 +36,7 @@ import java.net.URL;
 
 import java.util.LinkedList;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.TreeSet;
 import java.util.NoSuchElementException;
 import javax.imageio.ImageIO;
@@ -970,6 +971,45 @@ public final class StdDraw implements ActionListener, MouseListener, MouseMotion
             ys[i] = poly.get(i).y;
         }
         filledPolygon(xs, ys);
+    }
+
+   /***************************************************************************
+    *  Drawing Graphs
+    ***************************************************************************/
+    public static void drawGraph(HashMap<Point, ArrayList<Point>> graph, double radius) {
+      for (Point p : graph.keySet()) {
+        filledCircle(p, radius);
+        for (Point adj : graph.get(p)) {
+          line(p, adj);
+        }
+      }
+    }
+
+    public static void drawGraph(HashMap<Point, ArrayList<Point>> graph, double radius, Color color) {
+      setPenColor(color);
+      for (Point p : graph.keySet()) {
+        filledCircle(p, radius);
+        for (Point adj : graph.get(p)) {
+          line(p, adj);
+        }
+      }
+    }
+
+    public static void drawEdges(HashMap<Point, ArrayList<Point>> graph) {
+      for (Point p : graph.keySet()) {
+        for (Point adj : graph.get(p)) {
+          line(p, adj);
+        }
+      }
+    }
+
+    public static void drawEdges(HashMap<Point, ArrayList<Point>> graph, Color color) {
+      setPenColor(color);
+      for (Point p : graph.keySet()) {
+        for (Point adj : graph.get(p)) {
+          line(p, adj);
+        }
+      }
     }
 
    /***************************************************************************
