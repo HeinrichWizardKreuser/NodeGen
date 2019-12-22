@@ -817,6 +817,57 @@ public class CoreGeom {
     graph.get(b).add(a);
   }
 
+  public static void remove(Point toRemove, HashMap<Point, ArrayList<Point>> graph) {
+    // create list of points adjacent to toRemove to sever connection to
+    ArrayList<Point> toSever = new ArrayList<>();
+    // reason for copy is that loop would be interrupted otherwise
+    for (Point p : graph.get(toRemove)) {
+      toSever.add(p);
+    }
+    // sever connections
+    for (Point p : toSever) {
+      CoreGeom.sever(p, toRemove, graph);
+    }
+  }
+
+  public static void addBetween(Point e0, Point e1, HashMap<Point, ArrayList<Point>> graph, Point toAdd) {
+    sever(e0, e1, graph);
+    graph.put(toAdd, new ArrayList<Point>(0));
+    connect(toAdd, e0, graph);
+    connect(toAdd, e1, graph);
+  }
+
+  public static HashMap<Point, ArrayList<Point>> copy(HashMap<Point, ArrayList<Point>> graph) {
+    // make copy of graph
+    HashMap<Point, ArrayList<Point>> copy = new HashMap<>();
+    for (Point p : graph.keySet()) {
+      ArrayList<Point> adj = new ArrayList<>();
+      for (Point a : graph.get(p)) {
+        adj.add(a);
+      }
+      copy.put(p, adj);
+    }
+    return copy;
+  }
+
+  public static ArrayList<Point[]> edgeList(HashMap<Point, ArrayList<Point>> graph) {
+    // make a copy
+    HashMap<Point, ArrayList<Point>> copy = copy(graph);
+    // create the edge list
+    ArrayList<Point[]> edgeList = new ArrayList<Point[]>();
+    // add the edges of each point, one at a time, removing each point
+    while (!copy.isEmpty()) {
+      Point toRemove = Core.randomKey(copy);
+      // add each adjacent as edge
+      for (Point adj : copy.get(toRemove)) {
+        edgeList.add(new Point[]{toRemove, adj});
+      }
+      // remove point from copy
+      remove(toRemove, copy);
+    }
+    return edgeList;
+  }
+
 
   /**
    * Calculates the length of the given line.

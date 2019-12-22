@@ -1,17 +1,5 @@
 /*
 
-  TODO:
-    search "e1 is a leaf!" : fix this case
-
-  TODO:
-    when graph accepted, draw full graph
-
-  TODO:
-    when unnacceptable, explain how and what parameters must be set
-
-  TODO:
-    show how lengths progress through balancing
-
 */
 
 
@@ -23,6 +11,8 @@ public class NodeGen2 {
 
   // stores the location of each player and each pf their colors
   public static HashMap<Point, Color> playerColors = null;
+  public static ArrayList<Color> colors = null;
+  public static HashMap<Color, ArrayList<Double>> progression;
 
   public static void main(String[] args) {
     int size = 10;
@@ -41,6 +31,7 @@ public class NodeGen2 {
     StdDraw.setCanvasSize(w * pixls, h * pixls);
     StdDraw.setXscale(0, w);
     StdDraw.setYscale(0, h);
+    CoreDraw.spawnX += w * pixls;
 
 
     // phase 1.1
@@ -59,13 +50,24 @@ public class NodeGen2 {
     // phase 2.2
     HashMap<Point, HashMap<Point, ArrayList<Point>>> subgraphs = CoreGeom.voronoiGraph(vlis, graph);
 
+    CoreDraw stats = new CoreDraw(56, 20, 20, "Progression");
+    // keep track of progression
+    // mak colors to arraylist of doubles
+    progression = new HashMap<>();
+    for (Color c : colors) {
+      progression.put(c, new ArrayList<>());
+    }
+    StdDraw.enableDoubleBuffering();
     // while lengths are unnacceptable, perfrom phase 2.2 again
     while (!acceptable(subgraphs)) {
+
+      drawProgression(stats);
+      StdDraw.show();
+
 
       // draw graph in background
       StdDraw.clear(StdDraw.WHITE);
       StdDraw.drawGraph(graph, 0.2, StdDraw.LIGHT_GRAY);
-
       // Draw the edges of each subgraph
       for (Point spawn : subgraphs.keySet()) {
         HashMap<Point, ArrayList<Point>> subgraph = subgraphs.get(spawn);
@@ -74,15 +76,90 @@ public class NodeGen2 {
         // draw the nodes of the current spawns
         StdDraw.filledCircle(spawn, 0.1, color);
       }
-      Core.freeze("subgraphs");
+      // Core.freeze("subgraphs");
 
-      // get absolute centres
+
+
       HashMap<Point, Point[]> absoluteCentres = new HashMap<>();
-      for (Point spawn : subgraphs.keySet()) {
-        HashMap<Point, ArrayList<Point>> subgraph = subgraphs.get(spawn);
-        Point[] absoluteCentre = CoreGeom.absoluteCentre(subgraph);
-        absoluteCentres.put(spawn, absoluteCentre);
+      // check if stats are too similar so far
+      if (slowProgression()) {
+        Core.freeze("progression deemed slow, commencing extreme balance");
+        // then apply genetic algorithm
+        // make the absolute centres somethings else
+        // find the losing player
+        int N = progression.get(StdDraw.RED).size();
+        double min = progression.get(StdDraw.RED).get(N - 1);
+        Color minColor = StdDraw.RED;
+        for (Color c : progression.keySet()) {
+          double val = progression.get(c).get(N - 1);
+          if (val < min) {
+            min = val;
+            minColor = c;
+          }
+        }
+
+        // now we have determined the color of the player who is losing
+        // get the spawn point of that player
+        Point losingPlayer = null;
+        for (Point spawn : playerColors.keySet()) {
+          if (playerColors.get(spawn) == minColor) {
+            losingPlayer = spawn;
+            break;
+          }
+        }
+        for (Point spawn : subgraphs.keySet()) {
+          if (spawn == losingPlayer) {
+            continue;
+          }
+          HashMap<Point, ArrayList<Point>> subgraph = subgraphs.get(spawn);
+          // get distance to losingplayer
+          Point[] furthestNewSpawn = new Point[]{subgraph.get(spawn).get(0), spawn, subgraph.get(spawn).get(1)};
+          System.out.println("1");
+          double minLen = CoreGeom.lineLength(CoreGeom.aStar(graph, spawn, losingPlayer));
+          // get each edge in the graph
+          for (Point[] edge : CoreGeom.edgeList(subgraph)) {
+            System.out.println("2");
+            // check what the pathlength would be if it the spawn was on this edge instead
+            // get edge points
+            Point e0 = edge[0], e1 = edge[1];
+            // create point in centre
+            Point centre = new Point(e0, e1);
+            // add centre into graph
+            CoreGeom.addBetween(e0, e1, graph, centre);
+            // check the shortest distance to the losing player if this was in the real graph
+            ArrayList<Point> path = CoreGeom.aStar(graph, centre, losingPlayer);
+            // get length
+            double len = CoreGeom.lineLength(path);
+            // save if the length is the lowest
+            if (len < minLen) {
+              minLen = len;
+              furthestNewSpawn = new Point[]{e0, centre, e1};
+            }
+            // remove from graph
+            CoreGeom.remove(centre, graph);
+            System.out.println("3");
+          }
+          System.out.println("4");
+          // so now we have the point where the spawn ought to be.
+          // so we'll move it there later, save it for now
+          absoluteCentres.put(spawn, furthestNewSpawn);
+        }
+
+
+
+
+      } else {
+        // get absolute centres
+        for (Point spawn : subgraphs.keySet()) {
+          HashMap<Point, ArrayList<Point>> subgraph = subgraphs.get(spawn);
+          Point[] absoluteCentre = CoreGeom.absoluteCentre(subgraph);
+          absoluteCentres.put(spawn, absoluteCentre);
+        }
       }
+
+
+
+
 
       // Draw the absolute centres for each color
       for (Point spawn : absoluteCentres.keySet()) {
@@ -93,7 +170,10 @@ public class NodeGen2 {
         StdDraw.line(e0, e1, StdDraw.YELLOW);
         StdDraw.filledSquare(absoluteCentre, 0.1, color);
       }
-      Core.freeze("absolute centres");
+      // Core.freeze("absolute centres");
+
+
+
 
       // add them to the graph
       for (Point spawn : absoluteCentres.keySet()) {
@@ -112,20 +192,51 @@ public class NodeGen2 {
           // worst case scenario. this is impossible. This shows that e0 and e1 are not real. Odd
           Core.exit("e0 and e1 does not exist within the graph!");
         } else {
+          Point eLeaf = null, eReal = null;
           if (containsE0) {
-            // then e1 must be a leaf. odd, but not impossible
             Core.log("e1 is a leaf!");
-            while (true) {}
-            } else if (containsE1) {
-            // then e0 must be a leaf. odd, but not impossible
+            eLeaf = e1;
+            eReal = e0;
+          } else if (containsE1) {
             Core.log("e0 is a leaf!");
-            while (true) {}
-          } else {
-            // physically(programmatically) impossible
-            // more likely to be possible in quantum programming than now. lol.
+            eLeaf = e0;
+            eReal = e1;
           }
+
+          // finds the leaf with identical coordinates but not same and then
+          findAdjToOtherLeaf:
+          if (true) {
+            for (Point spawn2 : subgraphs.keySet()) {
+              if (spawn2 == spawn) {
+                continue;
+              }
+              HashMap<Point, ArrayList<Point>> subgraph = subgraphs.get(spawn2);
+              for (Point p : subgraph.keySet()) {
+                // check if leaf node
+                if (subgraph.get(p).size() == 1) {
+                  // check if .equals(e0) but != e0
+                  if (p.equals(eLeaf)) {
+                    Point adjToLeaf = subgraph.get(p).get(0);
+
+                    CoreGeom.sever(eReal, adjToLeaf, graph);
+                    graph.put(absoluteCentre, new ArrayList<Point>(0));
+                    CoreGeom.connect(absoluteCentre, adjToLeaf, graph);
+                    CoreGeom.connect(absoluteCentre, eReal, graph);
+
+                    break findAdjToOtherLeaf;
+                  }
+                }
+              }
+            }
+            Core.log("errrrrrr");
+            while (true) {}
+          }
+
         }
       }
+
+
+
 
       // remove the spawns from graph
       for (Point spawn : subgraphs.keySet()) {
@@ -144,6 +255,8 @@ public class NodeGen2 {
         CoreGeom.connect(e0, e1, graph);
       }
 
+
+
       // confirm that the graph no longer contains any trace of the spawn
       for (Point p : graph.keySet()) {
         if (vlis.contains(p)) {
@@ -155,6 +268,8 @@ public class NodeGen2 {
           }
         }
       }
+
+
 
       // spawn is removed, we must set the spawns to be the absolute centres.
       for (Point spawn : absoluteCentres.keySet()) {
@@ -168,9 +283,47 @@ public class NodeGen2 {
         vlis.add(absoluteCentre);
       }
 
+
+
       // reset subgraphs
       subgraphs = CoreGeom.voronoiGraph(vlis, graph);
+
+      StdDraw.show();
+
     }
+
+    // now draw the final graph
+    StdDraw.clear(StdDraw.WHITE);
+    StdDraw.drawGraph(graph, 0.2, StdDraw.LIGHT_GRAY);
+    // Draw the edges of each subgraph
+    for (Point spawn : subgraphs.keySet()) {
+      HashMap<Point, ArrayList<Point>> subgraph = subgraphs.get(spawn);
+      Color color = playerColors.get(spawn);
+      StdDraw.drawEdges(subgraph, color);
+      // draw the nodes of the current spawns
+      StdDraw.filledCircle(spawn, 0.1, color);
+    }
+
+    drawProgression(stats);
+
+  }
+
+  // check if the latest stats show that there hasn't been much change
+  public static boolean slowProgression() {
+    if (progression.get(StdDraw.RED).size() < 2) {
+      return false;
+    }
+    int lastI = progression.get(StdDraw.RED).size() - 1;
+    int secondLastI = lastI - 1;
+    for (Color c : progression.keySet()) {
+      ArrayList<Double> stats = progression.get(c);
+      // check if last few values are the same
+      double lastVal = stats.get(lastI), secondLastVal = stats.get(stats.size() - 2);
+      if (!Core.epsilon(stats.get(lastI), stats.get(secondLastI))) {
+        return false;
+      }
+    }
+    return true;
   }
 
   public static boolean acceptable(HashMap<Point, HashMap<Point, ArrayList<Point>>> subgraphs) {
@@ -187,13 +340,24 @@ public class NodeGen2 {
     double min = graphLengths.get(minSpawn), max = graphLengths.get(maxSpawn);
     // check if ratio is okay
     double ratio = (max - min) / max;
-    if (ratio > 0.25) {
+    if (ratio > 0.20) {
       Core.log("unnacceptable");
       System.out.println("lengths: ");
-      for (Point spawn : subgraphs.keySet()) {
-        double length = graphLengths.get(spawn);
-        System.out.println("\t"+StdDraw.colorName(playerColors.get(spawn))+" = "+length);
+
+      inOrderOfColorLoop:
+      for (Color color : colors) {
+        // find player that belongs to color
+        for (Point spawn : playerColors.keySet()) {
+          if (color == playerColors.get(spawn)) {
+            double length = graphLengths.get(spawn);
+            System.out.println("\t"+StdDraw.colorName(playerColors.get(spawn))+" = "+length);
+            // add to progression
+            progression.get(color).add(length);
+            continue inOrderOfColorLoop;
+          }
+        }
       }
+
       System.out.println();
       return false;
     }
@@ -203,14 +367,60 @@ public class NodeGen2 {
     for (Point spawn : subgraphs.keySet()) {
       double length = graphLengths.get(spawn);
       System.out.println("\t"+StdDraw.colorName(playerColors.get(spawn))+" = "+length);
+      // add to progression
+      progression.get(playerColors.get(spawn)).add(length);
     }
     System.out.println();
     return true;
   }
 
+  public static void drawProgression(CoreDraw stats) {
+    // filter down to what can fit on the screen
+
+    // draw up the progression
+    int x = progression.get(StdDraw.RED).size();
+    double min = progression.get(StdDraw.RED).get(0);
+    double max = min;
+    if (x > 1) {
+      // first get the highest one and the lowest one
+      for (Color c : colors) {
+        for (Double d : progression.get(c)) {
+          min = Math.min(min, d);
+          max = Math.max(max, d);
+        }
+      }
+      // now shape the stats graph so that the height is there
+      double scalar = stats.frameH / (max - min);
+      final double mini = min;
+      Function<Double, Double> scale = (d) -> {
+        return (d - mini) * scalar;
+      };
+      // now we have a way to scale all of the amounts
+      // we must now draw the entire graph
+      stats.clear(StdDraw.WHITE);
+      for (Color c : colors) {
+        stats.setPenColor(c);
+        ArrayList<Double> lis = progression.get(c);
+        // draw a line from the prev height to the current
+        // if x is greater than frameW, start i and a different place
+        if (x > stats.frameW) {
+          for (int i = x-stats.frameW; i < x; i++) {
+            Point prev = new Point(i-1 - (x-stats.frameW), scale.apply(lis.get(i-1)));
+            Point next = new Point(i - (x-stats.frameW), scale.apply(lis.get(i)));
+            stats.line(prev, next);
+          }
+        } else {
+          for (int i = 1; i < x; i++) {
+            Point prev = new Point(i-1, scale.apply(lis.get(i-1)));
+            Point next = new Point(i, scale.apply(lis.get(i)));
+            stats.line(prev, next);
+          }
+        }
+      }
+    }
+  }
   // phase 2.1
-  public static HashMap<Point, ArrayList<Point>> generatePlayerSpawns(
-    HashMap<Point, ArrayList<Point>> G, int players) {
+  public static HashMap<Point, ArrayList<Point>> generatePlayerSpawns(HashMap<Point, ArrayList<Point>> G, int players) {
     // now onto phase 2:
     // we must perform voronoi on the map
     // first choose random places to place players
@@ -297,6 +507,13 @@ public class NodeGen2 {
     playerColors.put(playerSpawns[1], StdDraw.BLUE);
     playerColors.put(playerSpawns[2], StdDraw.GREEN);
     playerColors.put(playerSpawns[3], StdDraw.PURPLE);
+
+    colors = new ArrayList<Color>(Arrays.asList(new Color[]{
+      StdDraw.RED,
+      StdDraw.BLUE,
+      StdDraw.GREEN,
+      StdDraw.PURPLE
+    }));
 
     return graph;
   }
