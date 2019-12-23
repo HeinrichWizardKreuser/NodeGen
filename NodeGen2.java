@@ -1,5 +1,6 @@
 /*
-
+  TODO:
+    uograde movement of spawns to Genetic Algorithm approach
 */
 
 
@@ -58,11 +59,13 @@ public class NodeGen2 {
       progression.put(c, new ArrayList<>());
     }
     StdDraw.enableDoubleBuffering();
+    stats.enableDoubleBuffering();
     // while lengths are unnacceptable, perfrom phase 2.2 again
     while (!acceptable(subgraphs)) {
 
       drawProgression(stats);
       StdDraw.show();
+      stats.show();
 
 
       // draw graph in background
@@ -83,7 +86,9 @@ public class NodeGen2 {
       HashMap<Point, Point[]> absoluteCentres = new HashMap<>();
       // check if stats are too similar so far
       if (slowProgression()) {
-        Core.freeze("progression deemed slow, commencing extreme balance");
+        // Core.freeze("progression deemed slow, commencing extreme balance");
+        Core.log("progression deemed slow, commencing extreme balance");
+
         // then apply genetic algorithm
         // make the absolute centres somethings else
         // find the losing player
@@ -107,45 +112,84 @@ public class NodeGen2 {
             break;
           }
         }
+        if (losingPlayer == null) {
+          Core.exit("losingPlayer == null");
+        }
+
+        // for each other player, iterate through edge set and add node in edge
         for (Point spawn : subgraphs.keySet()) {
+          Core.log(StdDraw.colorName(playerColors.get(spawn)));
           if (spawn == losingPlayer) {
+            Core.log("avoiding losing player");
+            // create the absoluteCentre for this spawn
+            HashMap<Point, ArrayList<Point>> subgraph = subgraphs.get(spawn);
+            Point[] absoluteCentre = CoreGeom.absoluteCentre(subgraph);
+            absoluteCentres.put(spawn, absoluteCentre);
             continue;
           }
+          Core.log("normal player");
+
+          // get subgraph
           HashMap<Point, ArrayList<Point>> subgraph = subgraphs.get(spawn);
+          // get adjacent to spawn
+          ArrayList<Point> adjToSpawn = subgraph.get(spawn);
+          if (adjToSpawn.size() != 2) {
+            Core.exit("__adjToSpawn.size() = " + adjToSpawn.size());
+          }
+
           // get distance to losingplayer
-          Point[] furthestNewSpawn = new Point[]{subgraph.get(spawn).get(0), spawn, subgraph.get(spawn).get(1)};
-          System.out.println("1");
-          double minLen = CoreGeom.lineLength(CoreGeom.aStar(graph, spawn, losingPlayer));
+          Point[] furthestNewSpawn = new Point[]{adjToSpawn.get(0), spawn, adjToSpawn.get(1)};
+          double maxLen = CoreGeom.lineLength(CoreGeom.aStar(graph, spawn, losingPlayer));
+          Core.log("maxLen = " + maxLen);
           // get each edge in the graph
+          forEachEdge:
           for (Point[] edge : CoreGeom.edgeList(subgraph)) {
-            System.out.println("2");
             // check what the pathlength would be if it the spawn was on this edge instead
+
+            // check if one of them is leaf
+            for (Point eNum : edge) {
+              if (!graph.containsKey(eNum)) {
+                // Core.freeze("avoiding leaf node");
+                continue forEachEdge;
+              }
+            }
+            // Core.freeze("normal node");
+
+            // create a copy to player with
+            HashMap<Point, ArrayList<Point>> copy = CoreGeom.copy(graph);
             // get edge points
             Point e0 = edge[0], e1 = edge[1];
             // create point in centre
             Point centre = new Point(e0, e1);
             // add centre into graph
-            CoreGeom.addBetween(e0, e1, graph, centre);
+            CoreGeom.addBetween(e0, e1, copy, centre);
             // check the shortest distance to the losing player if this was in the real graph
-            ArrayList<Point> path = CoreGeom.aStar(graph, centre, losingPlayer);
+            ArrayList<Point> path = CoreGeom.aStar(copy, centre, losingPlayer);
             // get length
             double len = CoreGeom.lineLength(path);
             // save if the length is the lowest
-            if (len < minLen) {
-              minLen = len;
+            if (maxLen < len) {
+              maxLen = len;
               furthestNewSpawn = new Point[]{e0, centre, e1};
+              Core.log("maxLen = " + maxLen);
             }
-            // remove from graph
-            CoreGeom.remove(centre, graph);
-            System.out.println("3");
           }
-          System.out.println("4");
+          // show us the edge with node
+          // StdDraw.setPenColor(playerColors.get(spawn));
+          // StdDraw.circle(furthestNewSpawn[0], 0.5);
+          // StdDraw.circle(furthestNewSpawn[2], 0.5);
+          // StdDraw.circle(furthestNewSpawn[1], 0.6);
+          // StdDraw.show();
+          // Core.freeze();
           // so now we have the point where the spawn ought to be.
           // so we'll move it there later, save it for now
           absoluteCentres.put(spawn, furthestNewSpawn);
         }
 
+        Core.freeze("absoluteCentres.size() = " + absoluteCentres.size());
 
+
+        // get the losing player's spawn
 
 
       } else {
@@ -184,21 +228,18 @@ public class NodeGen2 {
         boolean containsE0 = graph.containsKey(e0), containsE1 = graph.containsKey(e1);
         if (containsE0 && containsE1) { // best case scenario, then both e0 and e1 are in the graph
           // add absoluteCentre between them e0 and e1
-          CoreGeom.sever(e0, e1, graph);
-          graph.put(absoluteCentre, new ArrayList<Point>(0));
-          CoreGeom.connect(absoluteCentre, e0, graph);
-          CoreGeom.connect(absoluteCentre, e1, graph);
+          CoreGeom.addBetween(e0, e1, graph, absoluteCentre);
         } else if (!containsE0 && !containsE1) {
           // worst case scenario. this is impossible. This shows that e0 and e1 are not real. Odd
           Core.exit("e0 and e1 does not exist within the graph!");
         } else {
           Point eLeaf = null, eReal = null;
           if (containsE0) {
-            Core.log("e1 is a leaf!");
+            // Core.log("e1 is a leaf!");
             eLeaf = e1;
             eReal = e0;
           } else if (containsE1) {
-            Core.log("e0 is a leaf!");
+            // Core.log("e0 is a leaf!");
             eLeaf = e0;
             eReal = e1;
           }
@@ -217,12 +258,7 @@ public class NodeGen2 {
                   // check if .equals(e0) but != e0
                   if (p.equals(eLeaf)) {
                     Point adjToLeaf = subgraph.get(p).get(0);
-
-                    CoreGeom.sever(eReal, adjToLeaf, graph);
-                    graph.put(absoluteCentre, new ArrayList<Point>(0));
-                    CoreGeom.connect(absoluteCentre, adjToLeaf, graph);
-                    CoreGeom.connect(absoluteCentre, eReal, graph);
-
+                    CoreGeom.addBetween(eReal, adjToLeaf, graph, absoluteCentre);
                     break findAdjToOtherLeaf;
                   }
                 }
@@ -236,6 +272,10 @@ public class NodeGen2 {
       }
 
 
+
+      if (!CoreGeom.isUndirected(graph)) {
+        Core.exit("graph is directed");
+      }
 
 
       // remove the spawns from graph
@@ -251,22 +291,43 @@ public class NodeGen2 {
         Point e0 = adjToSpawn.get(0), e1 = adjToSpawn.get(1);
         graph.get(e0).remove(spawn);
         graph.get(e1).remove(spawn);
-        // connect them to each other instead (as they originally were)
+        // recconnect adjToSpawn
         CoreGeom.connect(e0, e1, graph);
       }
 
 
 
       // confirm that the graph no longer contains any trace of the spawn
-      for (Point p : graph.keySet()) {
-        if (vlis.contains(p)) {
-          Core.exit("graph still contains a spawn as key");
-        }
-        for (Point adj : graph.get(p)) {
-          if (vlis.contains(adj)) {
-            Core.exit("there still exists a node adjacent to spawn");
+      checkIfBroken:
+      if (true) {
+        fixIt:
+        if (true) {
+          for (Point p : graph.keySet()) {
+            if (vlis.contains(p)) {
+              Core.exit("graph still contains a spawn as key");
+            }
+            for (Point adj : graph.get(p)) {
+              if (vlis.contains(adj)) {
+                Core.log("there still exists a node adjacent to spawn");
+                // check which it is
+                Core.log(StdDraw.colorName(playerColors.get(adj)));
+                // break fixIt;
+              }
+            }
           }
+          break checkIfBroken;
         }
+        // // check who else is adjacent to spawn
+        // for (Point p : graph.keySet()) {
+        //   HashSet<Point> set = new HashSet<Point>(graph.get(p));
+        //   graph.get(p).clear();
+        //   for (Point adj : set) {
+        //     graph.get(p).add(adj);
+        //   }
+        //   for (Point spawn : vlis) {
+        //     graph.get(p).remove(spawn);
+        //   }
+        // }
       }
 
 
@@ -289,7 +350,16 @@ public class NodeGen2 {
       subgraphs = CoreGeom.voronoiGraph(vlis, graph);
 
       StdDraw.show();
+      stats.show();
 
+      // check if mouse pressed
+      if (stats.isMousePressed()) {
+        System.out.println("paused, press to resume");
+        while (stats.isMousePressed()) {} // wait for stop pressing
+        while (!stats.isMousePressed()) {} // wait to press again
+        System.out.println("resuming");
+        while (stats.isMousePressed()) {} // wait for stop pressing
+      }
     }
 
     // now draw the final graph
@@ -305,6 +375,8 @@ public class NodeGen2 {
     }
 
     drawProgression(stats);
+    StdDraw.show();
+    stats.show();
 
   }
 
@@ -420,7 +492,8 @@ public class NodeGen2 {
     }
   }
   // phase 2.1
-  public static HashMap<Point, ArrayList<Point>> generatePlayerSpawns(HashMap<Point, ArrayList<Point>> G, int players) {
+  public static HashMap<Point, ArrayList<Point>> generatePlayerSpawns(
+    HashMap<Point, ArrayList<Point>> G, int players) {
     // now onto phase 2:
     // we must perform voronoi on the map
     // first choose random places to place players

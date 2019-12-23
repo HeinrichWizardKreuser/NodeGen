@@ -607,6 +607,13 @@ public class CoreGeom {
     Point a,
     HashMap<Point, ArrayList<Point>> graph) {
 
+    if (a == null) {
+      throw new IllegalArgumentException("a is null");
+    }
+    if (!graph.containsKey(a)) {
+      throw new IllegalArgumentException("graph does not contain a");
+    }
+
     ArrayList<Point> curr = new ArrayList<>();
     curr.add(a);
     HashMap<Point, Double> cost = new HashMap<>();
@@ -614,6 +621,7 @@ public class CoreGeom {
     HashSet<Point> explored = new HashSet<>();
     while (!curr.isEmpty()) {
       // find point with lowest score in cost
+      // HashMap<Point, Double> map = Core.hashMap(curr, (p) -> cost.get(p));
       HashMap<Point, Double> map = new HashMap<>();
       for (Point p : curr) {
         map.put(p, cost.get(p));
@@ -623,6 +631,9 @@ public class CoreGeom {
       // explore point
       explored.add(p);
       // now go to all adjacent points
+      if (p == null) {
+        Core.exit("p == null");
+      }
       for (Point adj : graph.get(p)) {
         double newDist = cost.get(p) + p.dist(adj);
         if (explored.contains(adj) && newDist > cost.get(adj)) {
@@ -653,6 +664,14 @@ public class CoreGeom {
     HashMap<Point, ArrayList<Point>> graph,
     Point start,
     Point end) {
+
+    // check that start and end are in the graph
+    if (!graph.containsKey(start)) {
+      throw new IllegalArgumentException("start node not in graph!");
+    }
+    if (!graph.containsKey(end)) {
+      throw new IllegalArgumentException("end node not in graph!");
+    }
 
     ArrayList<Point> curr = new ArrayList<>();
     curr.add(start);
@@ -818,16 +837,12 @@ public class CoreGeom {
   }
 
   public static void remove(Point toRemove, HashMap<Point, ArrayList<Point>> graph) {
-    // create list of points adjacent to toRemove to sever connection to
-    ArrayList<Point> toSever = new ArrayList<>();
-    // reason for copy is that loop would be interrupted otherwise
+    // sever connections p -> toRemove
     for (Point p : graph.get(toRemove)) {
-      toSever.add(p);
+      graph.get(p).remove(toRemove);
     }
-    // sever connections
-    for (Point p : toSever) {
-      CoreGeom.sever(p, toRemove, graph);
-    }
+    // remove toRemove (which will remove toRemove as well as its adjacency list)
+    graph.remove(toRemove); // removes toRemove -> adjacent points
   }
 
   public static void addBetween(Point e0, Point e1, HashMap<Point, ArrayList<Point>> graph, Point toAdd) {
@@ -855,18 +870,87 @@ public class CoreGeom {
     HashMap<Point, ArrayList<Point>> copy = copy(graph);
     // create the edge list
     ArrayList<Point[]> edgeList = new ArrayList<Point[]>();
+
+    for (Point toRemove : graph.keySet()) {
+      for (Point adj : copy.get(toRemove)) {
+        edgeList.add(new Point[]{toRemove, adj});
+        copy.get(adj).remove(toRemove);
+      }
+    }
+
+    /*
     // add the edges of each point, one at a time, removing each point
     while (!copy.isEmpty()) {
       Point toRemove = Core.randomKey(copy);
       // add each adjacent as edge
       for (Point adj : copy.get(toRemove)) {
         edgeList.add(new Point[]{toRemove, adj});
+        copy.get(adj).remove(toRemove);
       }
       // remove point from copy
-      remove(toRemove, copy);
+      copy.remove(toRemove);
+      // // remove point from copy
+      // remove(toRemove, copy);
     }
+    */
     return edgeList;
   }
+
+  public static void fix(HashMap<Point, ArrayList<Point>> graph) {
+    // create a copy of the graph
+    HashMap<Point, ArrayList<Point>> fixed = new HashMap<>();
+    for (Point p : graph.keySet()) {
+      fixed.put(p, new ArrayList<Point>());
+    }
+    // check if p has null
+    for (Point p : graph.keySet()) {
+      if (graph.get(p) == null) {
+        graph.put(p, new ArrayList<Point>());
+      }
+    }
+    // now go through connections and add them
+    for (Point p : graph.keySet()) {
+      // just add all of the connections both ways
+      for (Point adj : graph.get(p)) {
+        fixed.get(adj).add(p);
+        fixed.get(p).add(p);
+      }
+    }
+    // we have created duplicates but now we will remove them
+    for (Point p : graph.keySet()) {
+      // check that there are no duplicates
+      ArrayList<Point> lis = graph.get(p);
+      int N = lis.size();
+      outer:
+      for (int i = 0; i < N; i++) {
+        Point curr = lis.get(i);
+        inner:
+        for (int j = i + 1; j < N; j++) {
+          Point next = lis.get(j);
+          // check if they are equal
+          if (curr == next) {
+            continue outer;
+          }
+        }
+        // then there are no duplicates of curr. add curr
+        fixed.get(p).add(curr);
+      }
+    }
+    // check that there are no connections to nodes that don't exist
+    for (Point p : fixed.keySet()) {
+      // check if this
+      for (int i = 0; i < fixed.get(p).size(); i++) {
+        // check if adj is in the graph
+        Point adj = fixed.get(p).get(i);
+        if (!graph.containsKey(adj)) {
+          fixed.get(p).remove(adj);
+          i--;
+        }
+      }
+    }
+    graph = fixed;
+  }
+
 
 
   /**

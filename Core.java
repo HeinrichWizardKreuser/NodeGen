@@ -8,6 +8,7 @@ import java.util.Calendar;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -588,6 +589,28 @@ public class Core {
 
   public static <V> V randomKey(ArrayList<V> lis) {
     return lis.get((int)(Math.random() * lis.size()));
+  }
+
+  // public static <K, V> HashMap<K, V> hashMap(ArrayList<K> lis, Function<K, V> f) {
+  //   HashMap<K, V> hashMap = new HashMap<>();
+  //   for (K key : lis) {
+  //     hashMap.put(key, f.apply(key));
+  //   }
+  //   return hashMap;
+  // }
+
+  // returns a shallow copy of the given arraylist
+  public static <T> ArrayList<T> copy(ArrayList<T> lis) {
+    ArrayList<T> copy = new ArrayList<T>();
+    for (T t : lis) {
+      copy.add(t);
+    }
+    return copy;
+  }
+
+  public static <T> boolean duplicates(ArrayList<T> lis) {
+    HashSet<T> set = new HashSet<T>(lis);
+    return set.size() < lis.size();
   }
 
   /**
