@@ -436,6 +436,7 @@ public class Core {
    * @return true if the array contains the given value
    */
   public static <T> boolean contains(T[] ts, T t) {
+    // return (new ArrayList<T>(ts)).contains(t);
     for (T i : ts) {
       if (i == t) {
         return true;
@@ -608,6 +609,16 @@ public class Core {
     return copy;
   }
 
+  // returns a shallow copy of the given arraylist
+  public static <K, V> HashMap<K, V> copy(HashMap<K, V> hashMap) {
+    HashMap<K, V> copy = new HashMap<K, V>();
+    for (K key : hashMap.keySet()) {
+      copy.put(key, hashMap.get(key));
+    }
+    return copy;
+  }
+
+  // check whether the given arraylist contains duplicates
   public static <T> boolean duplicates(ArrayList<T> lis) {
     HashSet<T> set = new HashSet<T>(lis);
     return set.size() < lis.size();
@@ -731,5 +742,9 @@ public class Core {
       last = next;
     }
     return random;
+  }
+
+  public static int randInt(int N) {
+    return (int)(Math.random() * N);
   }
 }

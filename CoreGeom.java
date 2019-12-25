@@ -877,22 +877,6 @@ public class CoreGeom {
         copy.get(adj).remove(toRemove);
       }
     }
-
-    /*
-    // add the edges of each point, one at a time, removing each point
-    while (!copy.isEmpty()) {
-      Point toRemove = Core.randomKey(copy);
-      // add each adjacent as edge
-      for (Point adj : copy.get(toRemove)) {
-        edgeList.add(new Point[]{toRemove, adj});
-        copy.get(adj).remove(toRemove);
-      }
-      // remove point from copy
-      copy.remove(toRemove);
-      // // remove point from copy
-      // remove(toRemove, copy);
-    }
-    */
     return edgeList;
   }
 
